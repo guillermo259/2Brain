@@ -29,7 +29,11 @@ import { safeLog } from '../security/logSanitizer';
 
 type Step = 'welcome' | 'pin' | 'pin-confirm' | 'seed' | 'seed-confirm' | 'restore';
 
-const TRIVIAL_PINS = new Set(['000000', '111111', '123456', '654321', '000000']);
+// Sólo rechazamos los PINs claramente triviales. Antes bloqueaba
+// 123456 y 654321, lo que confundía al usuario de prueba con un rechazo
+// silencioso en el paso Confirm. 6 dígitos tienen suficiente entropía
+// (10^6 = 1M combinaciones) para MVP.
+const TRIVIAL_PINS = new Set(['000000', '111111']);
 
 export const OnboardingWizard: React.FC = () => {
   const { completeSetup, completeSetupFromSeed, capabilities } = useAuth();
@@ -199,36 +203,54 @@ export const OnboardingWizard: React.FC = () => {
   );
 
   const renderPinConfirm = () => (
-    <PinKeypad
-      pin={pin2}
-      setPin={setPin2}
-      error={error}
-      onConfirm={() => {
-        // Validación ANTES de avanzar al seed step. Antes de este fix el
-        // usuario podía pulsar Continue con 2 dígitos y se iba directo
-        // al paso del recovery seed. Ahora mostramos el motivo exacto.
-        if (pin2.length < 6) {
-          setError('PIN must be at least 6 digits.');
-          return;
-        }
-        if (pin !== pin2) {
-          setError('PINs do not match — please re-enter the same PIN.');
-          return;
-        }
-        if (TRIVIAL_PINS.has(pin2)) {
-          setError(
-            'PIN is too simple. Pick something memorable but non-trivial.',
-          );
-          return;
-        }
-        const m = generateMnemonic12();
-        setMnemonic(m);
-        setStep('seed');
-      }}
-      isLoading={isLoading}
-      label="Confirm PIN"
-      helper="Enter the same PIN again to confirm."
-    />
+    <div className="space-y-4">
+      <PinKeypad
+        pin={pin2}
+        setPin={setPin2}
+        error={error}
+        onConfirm={() => {
+          // Validación ANTES de avanzar al seed step. Antes de este fix
+          // el usuario podía pulsar Continue con 2 dígitos y se iba
+          // directo al paso del recovery seed. Ahora mostramos el
+          // motivo exacto.
+          if (pin2.length < 6) {
+            setError('PIN must be at least 6 digits.');
+            return;
+          }
+          if (pin !== pin2) {
+            // Mensaje explícito + pista de cómo salir del paso.
+            setError('PINs do not match — please re-enter the same PIN.');
+            return;
+          }
+          if (TRIVIAL_PINS.has(pin2)) {
+            setError(
+              'PIN is too simple. Pick something memorable but non-trivial.',
+            );
+            return;
+          }
+          const m = generateMnemonic12();
+          setMnemonic(m);
+          setStep('seed');
+        }}
+        isLoading={isLoading}
+        label="Confirm PIN"
+        helper="Enter the same PIN again to confirm."
+      />
+      {/* Escape hatch: si el usuario se dio cuenta que tipeó mal el primer
+          PIN, puede volver al paso anterior sin tener que refrescar la
+          pestaña. Limpiamos estado sensible (pin2 y error). */}
+      <button
+        type="button"
+        onClick={() => {
+          setStep('pin');
+          setPin2('');
+          setError(null);
+        }}
+        className="w-full text-[11px] text-[#7e7576] hover:text-[#cfc4c5] transition-colors flex items-center justify-center gap-2"
+      >
+        ← Edit Master PIN (start over)
+      </button>
+    </div>
   );
 
   const renderSeed = () => (
