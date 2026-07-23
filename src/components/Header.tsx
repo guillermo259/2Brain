@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Bell, Plus, Sparkles, Cpu, CheckCircle2, X } from 'lucide-react';
+import { Search, Bell, Plus, Sparkles, Cpu, CheckCircle2, X, LogOut } from 'lucide-react';
+import { UserProfile } from './LoginScreen';
 
 interface HeaderProps {
   searchQuery: string;
@@ -7,6 +8,8 @@ interface HeaderProps {
   onOpenCmdK: () => void;
   onOpenNewNote: () => void;
   noteCount: number;
+  currentUser?: UserProfile | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,10 +17,16 @@ export const Header: React.FC<HeaderProps> = ({
   setSearchQuery,
   onOpenCmdK,
   onOpenNewNote,
-  noteCount
+  noteCount,
+  currentUser,
+  onLogout
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const userName = currentUser?.name || 'Guillermo';
+  const userEmail = currentUser?.email || 'guillermo@2brain.ai';
+  const userInitials = currentUser?.avatarInitials || 'G';
 
   return (
     <header className="fixed top-0 w-full z-50 flex justify-between items-center h-16 sm:h-20 px-3 sm:px-8 border-b border-[#27272a] bg-[#15121b]/80 backdrop-blur-md">
@@ -58,46 +67,34 @@ export const Header: React.FC<HeaderProps> = ({
               <path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path>
               <path d="M13.9 21.818a10 10 0 0 1-3.8 0"></path>
               <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"></path>
-              <path d="M2.182 13.9a10 10 0 0 1 0-3.8"></path>
-              <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path>
-              <path d="M21.818 10.1a10 10 0 0 1 0 3.8"></path>
-              <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
               <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"></path>
+              <path d="M2.182 13.9a10 10 0 0 1 0-3.8"></path>
+              <path d="M21.818 10.1a10 10 0 0 1 0 3.8"></path>
+              <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path>
+              <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
             </svg>
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search brain..."
-              className="bg-transparent border-none p-0 text-xs sm:text-sm w-full focus:outline-none focus:ring-0 placeholder:text-[#7e7576] font-medium text-[#f1f1f1] truncate"
-              onClick={(e) => e.stopPropagation()}
-            />
-            {searchQuery && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); setSearchQuery(''); }}
-                className="text-[#7e7576] hover:text-white shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <span className="text-xs sm:text-sm text-[#7e7576] truncate font-medium">
+              {searchQuery ? searchQuery : "Buscar memoria, etiqueta o síntesis semántica..."}
+            </span>
           </div>
-          <div className="hidden sm:flex items-center gap-2 border-l border-[#27272a] pl-3 shrink-0">
-            <kbd className="px-2 py-0.5 bg-[#3b3742] border border-[#27272a] rounded-md text-[10px] font-bold text-[#cfc4c5] uppercase tracking-wider">
-              Cmd K
-            </kbd>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="hidden sm:inline-block text-[10px] bg-[#1d1a23] text-[#cfc4c5] px-2 py-0.5 rounded-full border border-[#27272a] font-bold">
+              ⌘K
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Right Action Controls */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* Right Controls */}
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* New Note Button */}
         <button
           onClick={onOpenNewNote}
-          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full bg-white text-[#1b1b1b] font-bold text-xs hover:bg-neutral-200 active:scale-95 transition-all shadow-md"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-white text-[#1b1b1b] font-bold text-xs hover:bg-neutral-200 transition-all shadow-md active:scale-95"
         >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span className="hidden sm:inline">New Memory</span>
+          <Plus className="w-4 h-4 text-[#1b1b1b]" />
+          <span className="hidden sm:inline">Nueva Memoria</span>
         </button>
 
         {/* Notifications Button */}
@@ -119,23 +116,23 @@ export const Header: React.FC<HeaderProps> = ({
                   <Cpu className="w-3.5 h-3.5 text-[#fe7674]" /> Neural Signal Stream
                 </span>
                 <span className="text-[10px] bg-[#3b3742] text-[#cfc4c5] px-2 py-0.5 rounded-full font-bold">
-                  2 New
+                  2 Nuevas
                 </span>
               </div>
               <div className="space-y-3">
                 <div className="p-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a] text-xs space-y-1">
                   <div className="flex justify-between font-bold text-white">
-                    <span>CRDT Sync Worker</span>
-                    <span className="text-[10px] text-[#7e7576]">Just now</span>
+                    <span>Sincronización Local</span>
+                    <span className="text-[10px] text-[#7e7576]">Justo ahora</span>
                   </div>
-                  <p className="text-[#cfc4c5] text-[11px]">Local WASM vector index synchronized {noteCount} memory nodes.</p>
+                  <p className="text-[#cfc4c5] text-[11px]">Índice de vectores local WASM sincronizado con {noteCount} nodos.</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a] text-xs space-y-1">
                   <div className="flex justify-between font-bold text-white">
-                    <span>Entity Link Identified</span>
-                    <span className="text-[10px] text-[#7e7576]">15m ago</span>
+                    <span>Afinidad Semántica</span>
+                    <span className="text-[10px] text-[#7e7576]">hace 15m</span>
                   </div>
-                  <p className="text-[#cfc4c5] text-[11px]">88% cluster affinity detected between Llama-3 & Distributed Architecture.</p>
+                  <p className="text-[#cfc4c5] text-[11px]">88% de afinidad detectada en el cluster de Arquitectura.</p>
                 </div>
               </div>
             </div>
@@ -147,31 +144,43 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="w-10 h-10 rounded-full bg-white flex items-center justify-center font-bold text-xs text-[#1b1b1b] shadow-md hover:scale-105 active:scale-95 transition-all"
-            title="Julian Drake (JD)"
+            title={`${userName} (${userInitials})`}
           >
-            JD
+            {userInitials}
           </button>
 
           {showUserMenu && (
             <div className="absolute right-0 mt-3 w-64 bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in duration-150">
               <div className="flex items-center gap-3 border-b border-[#27272a] pb-3 mb-3">
                 <div className="w-9 h-9 rounded-full bg-white text-[#1b1b1b] font-bold flex items-center justify-center text-xs">
-                  JD
+                  {userInitials}
                 </div>
-                <div>
-                  <div className="text-sm font-bold text-white">Julian Drake</div>
-                  <div className="text-[11px] text-[#7e7576]">julian@neural2b.io</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-white truncate">{userName}</div>
+                  <div className="text-[11px] text-[#7e7576] truncate">{userEmail}</div>
                 </div>
               </div>
               <div className="space-y-1 text-xs">
                 <div className="px-3 py-2 rounded-xl bg-[#1d1a23] text-[#cfc4c5] flex justify-between items-center">
-                  <span>Brain Capacity</span>
+                  <span>Capacidad Brain</span>
                   <span className="font-bold text-white">6.4 GB / 100 GB</span>
                 </div>
                 <div className="px-3 py-2 rounded-xl hover:bg-[#1d1a23] text-[#cfc4c5] flex items-center gap-2 cursor-pointer transition-colors">
                   <Sparkles className="w-3.5 h-3.5 text-[#c8bfff]" />
-                  <span>Gemini Memory Core</span>
+                  <span>Gemma 2B Active</span>
                 </div>
+                {onLogout && (
+                  <div
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      onLogout();
+                    }}
+                    className="px-3 py-2 rounded-xl hover:bg-[#fe7674]/15 hover:text-[#fe7674] text-[#cfc4c5] flex items-center gap-2 cursor-pointer transition-colors mt-2 border-t border-[#27272a] pt-2"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Cerrar Sesión</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

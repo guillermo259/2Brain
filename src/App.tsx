@@ -6,15 +6,46 @@ import { Graph2D } from './components/Graph2D';
 import { CmdKModal } from './components/CmdKModal';
 import { NewNoteModal } from './components/NewNoteModal';
 import { NoteDetailModal } from './components/NoteDetailModal';
+import { LoginScreen, UserProfile } from './components/LoginScreen';
 import { INITIAL_NOTES } from './data/initialNotes';
 import { NoteItem, ContextCategory } from './types';
 import { Sparkles, Brain, Plus, Mic, CheckSquare, Image as ImageIcon, Network } from 'lucide-react';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('2b_auth_state') === 'true';
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem('2b_user_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
   const [notes, setNotes] = useState<NoteItem[]>(INITIAL_NOTES);
   const [activeCategory, setActiveCategory] = useState<ContextCategory>('Everywhere');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
+
+  const handleLogin = (user: UserProfile) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    localStorage.setItem('2b_auth_state', 'true');
+    localStorage.setItem('2b_user_profile', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    localStorage.removeItem('2b_auth_state');
+    localStorage.removeItem('2b_user_profile');
+  };
 
   // Modals
   const [isCmdKOpen, setIsCmdKOpen] = useState(false);
@@ -124,6 +155,10 @@ export default function App() {
     }, 1500);
   };
 
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
   return (
     <div className="bg-[#0f0d15] text-[#f1f1f1] selection:bg-white/20 selection:text-white min-h-screen overflow-hidden flex flex-col font-sans">
       {/* Background Radial Glow */}
@@ -138,6 +173,8 @@ export default function App() {
         onOpenCmdK={() => setIsCmdKOpen(true)}
         onOpenNewNote={() => setIsNewNoteOpen(true)}
         noteCount={notes.length}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* AI Toast Banner */}
