@@ -1,3 +1,8 @@
+// Polyfill: `bip39` (Node.js lib) usa Buffer internamente, que no existe
+// en el navegador. Importamos el paquete `buffer` y lo exponemos como global.
+import { Buffer } from 'buffer';
+globalThis.Buffer = Buffer;
+
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';

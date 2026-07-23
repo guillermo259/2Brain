@@ -10,7 +10,7 @@
  * También soporta "Restore from seed" como flujo alternativo.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useKeypadInput } from './useKeypadInput';
 import {
   Brain,
@@ -20,6 +20,7 @@ import {
   Sparkles,
   ArrowRight,
   Check,
+  Copy,
 } from 'lucide-react';
 import { DotField } from '../components/DotField';
 import { useAuth } from './AuthProvider';
@@ -46,21 +47,17 @@ export const OnboardingWizard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enableBiometric, setEnableBiometric] = useState(true);
+  const [seedCopied, setSeedCopied] = useState(false);
 
   const containerSize = useMemo(() => ({
     width: 1920,
     height: 1080,
   }), []);
 
-  // UX: cuando el usuario re-tipea un dígito en cualquier campo PIN,
-  // limpiamos el mensaje de error de la pantalla. Si el error no se
-  // toca, queda obsoleto (e.g. "PINs do not match" sigue visible
-  // mientras el usuario está corrigiendo).
-  useEffect(() => {
-    if (error) setError(null);
-    // intentionally only depend on pin lengths / actual contents
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin, pin2]);
+  // El error se limpia dentro de handleDigit (en PinKeypad) cuando el
+  // usuario pulsa un dígito. No usamos useEffect para esto porque React
+  // puede ejecutar el effect en el mismo ciclo que el setError del
+  // onConfirm, borrando el mensaje antes de que el usuario lo vea.
 
   const submitNewBrain = async () => {
     if (pin.length < 6) {
@@ -195,7 +192,20 @@ export const OnboardingWizard: React.FC = () => {
       pin={pin}
       setPin={setPin}
       error={error}
-      onConfirm={() => setStep('pin-confirm')}
+      onClearError={() => setError(null)}
+      onConfirm={() => {
+        if (pin.length < 6) {
+          setError('PIN must be at least 6 digits.');
+          return;
+        }
+        if (TRIVIAL_PINS.has(pin)) {
+          setError(
+            'PIN is too simple. Pick something memorable but non-trivial.',
+          );
+          return;
+        }
+        setStep('pin-confirm');
+      }}
       isLoading={isLoading}
       label="Master PIN"
       helper="6–12 digits. Choose a non-trivial sequence."
@@ -208,6 +218,7 @@ export const OnboardingWizard: React.FC = () => {
         pin={pin2}
         setPin={setPin2}
         error={error}
+        onClearError={() => setError(null)}
         onConfirm={() => {
           // Validación ANTES de avanzar al seed step. Antes de este fix
           // el usuario podía pulsar Continue con 2 dígitos y se iba
@@ -228,9 +239,14 @@ export const OnboardingWizard: React.FC = () => {
             );
             return;
           }
-          const m = generateMnemonic12();
-          setMnemonic(m);
-          setStep('seed');
+          try {
+            const m = generateMnemonic12();
+            setMnemonic(m);
+            setStep('seed');
+          } catch (e) {
+            safeLog.error('mnemonic generation failed', e);
+            setError('Could not generate recovery seed. Please try again.');
+          }
         }}
         isLoading={isLoading}
         label="Confirm PIN"
@@ -273,6 +289,41 @@ export const OnboardingWizard: React.FC = () => {
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(mnemonic);
+            setSeedCopied(true);
+            setTimeout(() => setSeedCopied(false), 2000);
+          } catch {
+            // Fallback: select & copy via execCommand (HTTP / insecure ctx).
+            const ta = document.createElement('textarea');
+            ta.value = mnemonic;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            setSeedCopied(true);
+            setTimeout(() => setSeedCopied(false), 2000);
+          }
+        }}
+        className="w-full py-2.5 px-4 rounded-xl bg-[#1d1a23] border border-[#27272a] hover:border-[#c8bfff]/60 text-white font-bold text-xs transition-all flex items-center justify-center gap-2"
+      >
+        {seedCopied ? (
+          <>
+            <Check className="w-4 h-4 text-green-400" />
+            <span className="text-green-400">Copied to clipboard</span>
+          </>
+        ) : (
+          <>
+            <Copy className="w-4 h-4 text-[#c8bfff]" />
+            <span>Copy all words</span>
+          </>
+        )}
+      </button>
       <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-[#fe7674]/10 border border-[#fe7674]/30 text-xs text-[#fe7674]">
         <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
         <span>This seed is shown only once. If you lose it, no one — not even
@@ -446,19 +497,25 @@ const PinKeypad: React.FC<{
   pin: string;
   setPin: (s: string) => void;
   error: string | null;
+  onClearError: () => void;
   onConfirm: () => void;
   isLoading: boolean;
   label: string;
   helper: string;
-}> = ({ pin, setPin, error, onConfirm, isLoading, label, helper }) => {
+}> = ({ pin, setPin, error, onClearError, onConfirm, isLoading, label, helper }) => {
   const handleDigit = (d: string) => {
     if (isLoading) return;
-    if (pin.length >= 12) return;
-    setPin(pin + d);
+    // Limpiamos el error en cuanto el usuario pulsa un dígito nuevo.
+    // Lo hacemos aquí (no en un useEffect) para evitar que React ejecute
+    // el effect en el mismo ciclo que el setError del onConfirm, borrando
+    // el mensaje antes de que el usuario lo vea.
+    if (error) onClearError();
+    setPin((prev) => (prev.length >= 12 ? prev : prev + d));
   };
   const handleBackspace = () => {
     if (isLoading) return;
-    setPin(pin.slice(0, -1));
+    if (error) onClearError();
+    setPin((prev) => prev.slice(0, -1));
   };
 
   // Keyboard support for desktop users: 0-9 / Backspace / Enter -> Confirm.

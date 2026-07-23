@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 `;
 
+// NOTA: Esta tabla requiere el módulo `vec0` (sqlite-vec), que NO está
+// incluido en sql.js. Se omite intencionalmente de SCHEMA_V1_ALL.
+// Se activará cuando se migre a wa-sqlite + vec0.
 export const SCHEMA_V1_VEC = `
 -- Tabla virtual de embeddings (forward-compat con sqlite-vec).
 -- En MVP las queries de KNN se ejecutan en TS leyendo la columna
@@ -59,9 +62,14 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
+// NOTA: SCHEMA_V1_VEC se omite intencionalmente. La tabla virtual
+// vec_notes requiere el módulo `vec0` (sqlite-vec), que NO está
+// incluido en el build WASM de sql.js. Se activará cuando se migre
+// a wa-sqlite + vec0. Mientras tanto, el KNN se hace en TypeScript
+// leyendo la columna notes.embedding.
 export const SCHEMA_V1_ALL: readonly string[] = [
   SCHEMA_V1_NOTES,
-  SCHEMA_V1_VEC,
+  // SCHEMA_V1_VEC,  // ← requiere sqlite-vec (no disponible en sql.js)
   SCHEMA_V1_INDEXES,
   SCHEMA_V1_META,
 ];

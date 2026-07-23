@@ -15,6 +15,7 @@
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^5.2.0",
     "bip39": "^3.1.0",
+    "buffer": "^6.0.3",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "lucide-react": "^0.546.0",

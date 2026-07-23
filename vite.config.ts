@@ -6,6 +6,11 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Polyfill: `bip39` references Node's `global` object. Map it to
+    // `globalThis` so the browser doesn't throw ReferenceError.
+    define: {
+      global: 'globalThis',
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
