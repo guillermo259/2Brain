@@ -16,6 +16,7 @@ export interface EntityMetric {
 export interface NoteItem {
   id: string;
   title: string;
+  content?: string;
   type: NoteType;
   timestamp: string;
   category: ContextCategory;

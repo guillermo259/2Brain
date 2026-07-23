@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Bell, Plus, Sparkles, Cpu, CheckCircle2, X, LogOut } from 'lucide-react';
-import { UserProfile } from './LoginScreen';
+import { Search, Bell, Plus, Sparkles, Cpu, LogOut } from 'lucide-react';
+import type { UserAccount } from '../auth/AuthProvider';
 
 interface HeaderProps {
   searchQuery: string;
@@ -8,7 +8,7 @@ interface HeaderProps {
   onOpenCmdK: () => void;
   onOpenNewNote: () => void;
   noteCount: number;
-  currentUser?: UserProfile | null;
+  currentUser?: UserAccount | null;
   onLogout?: () => void;
 }
 
@@ -24,9 +24,9 @@ export const Header: React.FC<HeaderProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const userName = currentUser?.name || 'Guillermo';
-  const userEmail = currentUser?.email || 'guillermo@2brain.ai';
-  const userInitials = currentUser?.avatarInitials || 'G';
+  const userName = currentUser?.name || 'You';
+  const userEmail = currentUser?.email || 'guest@2brain.ai';
+  const userInitials = currentUser?.avatarInitials || 'YB';
 
   return (
     <header className="fixed top-0 w-full z-50 flex justify-between items-center h-16 sm:h-20 px-3 sm:px-8 border-b border-[#27272a] bg-[#15121b]/80 backdrop-blur-md">
@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
               <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
             </svg>
             <span className="text-xs sm:text-sm text-[#7e7576] truncate font-medium">
-              {searchQuery ? searchQuery : "Buscar memoria, etiqueta o síntesis semántica..."}
+              {searchQuery ? searchQuery : "Search memory, tag or semantic synthesis..."}
             </span>
           </div>
 
@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-white text-[#1b1b1b] font-bold text-xs hover:bg-neutral-200 transition-all shadow-md active:scale-95"
         >
           <Plus className="w-4 h-4 text-[#1b1b1b]" />
-          <span className="hidden sm:inline">Nueva Memoria</span>
+          <span className="hidden sm:inline">New Memory</span>
         </button>
 
         {/* Notifications Button */}
@@ -116,23 +116,23 @@ export const Header: React.FC<HeaderProps> = ({
                   <Cpu className="w-3.5 h-3.5 text-[#fe7674]" /> Neural Signal Stream
                 </span>
                 <span className="text-[10px] bg-[#3b3742] text-[#cfc4c5] px-2 py-0.5 rounded-full font-bold">
-                  2 Nuevas
+                  2 New
                 </span>
               </div>
               <div className="space-y-3">
                 <div className="p-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a] text-xs space-y-1">
                   <div className="flex justify-between font-bold text-white">
-                    <span>Sincronización Local</span>
-                    <span className="text-[10px] text-[#7e7576]">Justo ahora</span>
+                    <span>Local Sync Worker</span>
+                    <span className="text-[10px] text-[#7e7576]">Just now</span>
                   </div>
-                  <p className="text-[#cfc4c5] text-[11px]">Índice de vectores local WASM sincronizado con {noteCount} nodos.</p>
+                  <p className="text-[#cfc4c5] text-[11px]">Local WASM vector index synchronized {noteCount} memory nodes.</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a] text-xs space-y-1">
                   <div className="flex justify-between font-bold text-white">
-                    <span>Afinidad Semántica</span>
-                    <span className="text-[10px] text-[#7e7576]">hace 15m</span>
+                    <span>Semantic Affinity</span>
+                    <span className="text-[10px] text-[#7e7576]">15m ago</span>
                   </div>
-                  <p className="text-[#cfc4c5] text-[11px]">88% de afinidad detectada en el cluster de Arquitectura.</p>
+                  <p className="text-[#cfc4c5] text-[11px]">88% cluster affinity detected in Architecture cluster.</p>
                 </div>
               </div>
             </div>
@@ -162,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="space-y-1 text-xs">
                 <div className="px-3 py-2 rounded-xl bg-[#1d1a23] text-[#cfc4c5] flex justify-between items-center">
-                  <span>Capacidad Brain</span>
+                  <span>Brain Capacity</span>
                   <span className="font-bold text-white">6.4 GB / 100 GB</span>
                 </div>
                 <div className="px-3 py-2 rounded-xl hover:bg-[#1d1a23] text-[#cfc4c5] flex items-center gap-2 cursor-pointer transition-colors">
@@ -178,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
                     className="px-3 py-2 rounded-xl hover:bg-[#fe7674]/15 hover:text-[#fe7674] text-[#cfc4c5] flex items-center gap-2 cursor-pointer transition-colors mt-2 border-t border-[#27272a] pt-2"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Cerrar Sesión</span>
+                    <span>Sign Out</span>
                   </div>
                 )}
               </div>

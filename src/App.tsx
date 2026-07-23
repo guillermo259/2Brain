@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { NoteCard } from './components/NoteCard';
@@ -6,53 +6,46 @@ import { Graph2D } from './components/Graph2D';
 import { CmdKModal } from './components/CmdKModal';
 import { NewNoteModal } from './components/NewNoteModal';
 import { NoteDetailModal } from './components/NoteDetailModal';
-import { LoginScreen, UserProfile } from './components/LoginScreen';
-import { INITIAL_NOTES } from './data/initialNotes';
+import { useAuth } from './auth/AuthProvider';
+import { notesRepo } from './db/NotesRepository';
+import { flush as flushDb } from './db/DbClient';
+import { safeLog } from './security/logSanitizer';
 import { NoteItem, ContextCategory } from './types';
-import { Sparkles, Brain, Plus, Mic, CheckSquare, Image as ImageIcon, Network } from 'lucide-react';
+import { Sparkles, Brain } from 'lucide-react';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('2b_auth_state') === 'true';
-  });
+  const { state, notes, refreshNotes, lock: lockAuth } = useAuth();
 
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('2b_user_profile');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  });
+  // State narrowed: si `state.kind !== 'active'`, es unreachable porque
+  // RootRouter ya renderiza otra cosa. Pero TypeScript necesita narrowing.
+  if (state.kind !== 'active') return null;
 
-  const [notes, setNotes] = useState<NoteItem[]>(INITIAL_NOTES);
+  const { user, masterKey } = state;
+
   const [activeCategory, setActiveCategory] = useState<ContextCategory>('Everywhere');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
 
-  const handleLogin = (user: UserProfile) => {
-    setIsAuthenticated(true);
-    setCurrentUser(user);
-    localStorage.setItem('2b_auth_state', 'true');
-    localStorage.setItem('2b_user_profile', JSON.stringify(user));
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.removeItem('2b_auth_state');
-    localStorage.removeItem('2b_user_profile');
-  };
-
-  // Modals
   const [isCmdKOpen, setIsCmdKOpen] = useState(false);
   const [isNewNoteOpen, setIsNewNoteOpen] = useState(false);
   const [inspectedNote, setInspectedNote] = useState<NoteItem | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'feed' | 'graph'>('feed');
+
+  // ───── Mutations: cada cambio muta notesRepo + hace flush cifrado ─────
+
+  /**
+   * Helper central: tras cualquier mutación del repositorio, refresca
+   * el estado React desde la DB y persiste el blob cifrado en IDB.
+   */
+  const commitChanges = useCallback(async () => {
+    try {
+      refreshNotes();
+      await flushDb(masterKey);
+    } catch (e) {
+      safeLog.error('commitChanges failed', e);
+    }
+  }, [masterKey, refreshNotes]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -61,7 +54,7 @@ export default function App() {
       'Deep Work': 0,
       Philosophical: 0,
       Infrastructure: 0,
-      Visuals: 0
+      Visuals: 0,
     };
 
     notes.forEach((note) => {
@@ -76,12 +69,9 @@ export default function App() {
   // Filtered notes
   const filteredNotes = useMemo(() => {
     return notes.filter((note) => {
-      // Category filter
       if (activeCategory !== 'Everywhere' && note.category !== activeCategory) {
         return false;
       }
-
-      // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = note.title.toLowerCase().includes(q);
@@ -90,74 +80,123 @@ export default function App() {
         const matchesCategory = note.category.toLowerCase().includes(q);
         return matchesTitle || matchesSummary || matchesTag || matchesCategory;
       }
-
       return true;
     });
   }, [notes, activeCategory, searchQuery]);
 
   // Handlers
-  const handleToggleChecklist = (noteId: string, itemId: string) => {
-    setNotes((prev) =>
-      prev.map((n) => {
-        if (n.id !== noteId || !n.checklist) return n;
-        return {
-          ...n,
-          checklist: n.checklist.map((item) =>
-            item.id === itemId ? { ...item, completed: !item.completed } : item
-          )
-        };
-      })
-    );
-  };
+  const handleToggleChecklist = useCallback(
+    async (noteId: string, itemId: string) => {
+      try {
+        notesRepo.toggleChecklistItem(noteId, itemId);
+        await commitChanges();
+      } catch (e) {
+        safeLog.error('toggle checklist failed', e);
+      }
+    },
+    [commitChanges],
+  );
 
-  const handleTogglePin = (noteId: string) => {
-    setNotes((prev) =>
-      prev.map((n) => (n.id === noteId ? { ...n, isPinned: !n.isPinned } : n))
-    );
-  };
+  const handleTogglePin = useCallback(
+    async (noteId: string) => {
+      try {
+        notesRepo.togglePin(noteId);
+        await commitChanges();
+      } catch (e) {
+        safeLog.error('toggle pin failed', e);
+      }
+    },
+    [commitChanges],
+  );
 
-  const handleDeleteNote = (noteId: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
-    if (selectedNote?.id === noteId) setSelectedNote(null);
-  };
+  const handleDeleteNote = useCallback(
+    async (noteId: string) => {
+      try {
+        notesRepo.delete(noteId);
+        await commitChanges();
+        if (selectedNote?.id === noteId) setSelectedNote(null);
+      } catch (e) {
+        safeLog.error('delete note failed', e);
+      }
+    },
+    [commitChanges, selectedNote?.id],
+  );
 
-  const handleAddNote = (newNote: NoteItem) => {
-    setNotes((prev) => [newNote, ...prev]);
-    setSelectedNote(newNote);
-    setAiNotice(`New memory node "${newNote.title}" synced to 2B Brain.`);
-    setTimeout(() => setAiNotice(null), 4000);
-  };
+  const handleAddNote = useCallback(
+    async (newNote: NoteItem) => {
+      try {
+        notesRepo.create(newNote);
+        await commitChanges();
+        setSelectedNote(newNote);
+        setAiNotice(`New memory node "${newNote.title}" synced to 2B Brain.`);
+        setTimeout(() => setAiNotice(null), 4000);
+      } catch (e) {
+        safeLog.error('add note failed', e);
+      }
+    },
+    [commitChanges],
+  );
 
-  const handleUpdateNote = (updatedNote: NoteItem) => {
-    setNotes((prev) => prev.map((n) => (n.id === updatedNote.id ? updatedNote : n)));
-    if (selectedNote?.id === updatedNote.id) setSelectedNote(updatedNote);
-    setInspectedNote(updatedNote);
-  };
+  const handleUpdateNote = useCallback(
+    async (updatedNote: NoteItem) => {
+      try {
+        notesRepo.update(updatedNote.id, updatedNote);
+        await commitChanges();
+        if (selectedNote?.id === updatedNote.id) setSelectedNote(updatedNote);
+        setInspectedNote(updatedNote);
+      } catch (e) {
+        safeLog.error('update note failed', e);
+      }
+    },
+    [commitChanges, selectedNote?.id],
+  );
 
-  const handleAiSynthesize = (prompt: string) => {
-    setAiNotice(`Gemini query running: "${prompt}"... Creating neural memory synthesis.`);
-    setTimeout(() => {
-      const generatedNote: NoteItem = {
-        id: `note-ai-${Date.now()}`,
-        title: `AI Synthesis: ${prompt.slice(0, 24)}...`,
-        type: 'architecture',
-        timestamp: 'JUST NOW',
-        category: activeCategory === 'Everywhere' ? 'Infrastructure' : activeCategory,
-        summary: `Synthesized knowledge based on prompt "${prompt}". Cross-indexed with local WASM database vectors and ${notes.length} brain nodes.`,
-        tags: ['AI', 'SYNTHESIS', '2B'],
-        icon: 'memory',
-        connectedNodeIds: notes.slice(0, 3).map((n) => n.id)
-      };
-      setNotes((prev) => [generatedNote, ...prev]);
-      setSelectedNote(generatedNote);
-      setAiNotice(`Neural memory node created via AI query!`);
-      setTimeout(() => setAiNotice(null), 4000);
-    }, 1500);
-  };
+  const handleAiSynthesize = useCallback(
+    async (prompt: string) => {
+      setAiNotice(
+        `Local neural query running: "${prompt}"... Creating memory synthesis.`,
+      );
+      setTimeout(async () => {
+        try {
+          const generatedNote: NoteItem = {
+            id: `note-ai-${Date.now()}`,
+            title: `AI Synthesis: ${prompt.slice(0, 24)}...`,
+            type: 'architecture',
+            timestamp: 'JUST NOW',
+            category:
+              activeCategory === 'Everywhere' ? 'Infrastructure' : activeCategory,
+            summary: `Synthesised knowledge based on prompt "${prompt}". Cross-indexed with local WASM database ${notes.length} brain nodes.`,
+            tags: ['AI', 'SYNTHESIS', '2B'],
+            icon: 'memory',
+            connectedNodeIds: notes.slice(0, 3).map((n) => n.id),
+          };
+          notesRepo.create(generatedNote);
+          await commitChanges();
+          setSelectedNote(generatedNote);
+          setAiNotice('Neural memory node created.');
+          setTimeout(() => setAiNotice(null), 4000);
+        } catch (e) {
+          safeLog.error('AI synthesis failed', e);
+        }
+      }, 1500);
+    },
+    [activeCategory, commitChanges, notes],
+  );
 
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
+  const handleLogout = useCallback(() => {
+    lockAuth();
+  }, [lockAuth]);
+
+  // Live snapshot del `inspectedNote` derivada desde `notes`. Esto evita
+  // un useEffect problemático que re-renderizaba en bucle comparando
+  // referencias objeto contra refs de `rowToNote` (siempre nuevas).
+  const liveInspectedNote = useMemo(
+    () =>
+      inspectedNote
+        ? notes.find((n) => n.id === inspectedNote.id) ?? inspectedNote
+        : null,
+    [notes, inspectedNote],
+  );
 
   return (
     <div className="bg-[#0f0d15] text-[#f1f1f1] selection:bg-white/20 selection:text-white min-h-screen overflow-hidden flex flex-col font-sans">
@@ -173,7 +212,7 @@ export default function App() {
         onOpenCmdK={() => setIsCmdKOpen(true)}
         onOpenNewNote={() => setIsNewNoteOpen(true)}
         noteCount={notes.length}
-        currentUser={currentUser}
+        currentUser={user}
         onLogout={handleLogout}
       />
 
@@ -299,7 +338,7 @@ export default function App() {
 
       {/* Note Detail / Inspector Modal */}
       <NoteDetailModal
-        note={inspectedNote}
+        note={liveInspectedNote}
         onClose={() => setInspectedNote(null)}
         onUpdateNote={handleUpdateNote}
         onDeleteNote={handleDeleteNote}
