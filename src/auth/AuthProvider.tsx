@@ -63,7 +63,6 @@ import {
 } from '../security/biometrics';
 import { autoLock, type AutoLockSetting } from './autoLock';
 import { notesRepo } from '../db/NotesRepository';
-import { INITIAL_NOTES } from '../data/initialNotes';
 import { safeLog } from '../security/logSanitizer';
 import type { NoteItem } from '../types';
 
@@ -210,12 +209,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         await safeWipeCipher();
         const masterKey = await deriveKdk(pin, salt);
 
-        // Fresh DB + seed initial notes.
+        // Fresh DB.
         await openDatabase(masterKey, { fresh: true });
-        for (const n of INITIAL_NOTES) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          notesRepo.create(n as any);
-        }
         await flushDb(masterKey);
 
         if (mnemonic) {
@@ -284,11 +279,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         await safeWipeCipher();
         const masterKey = await deriveKeyFromMnemonic(mnemonic, salt);
         await openDatabase(masterKey, { fresh: true });
-        // Seed datos seed (mismas que onboarding PIN).
-        for (const n of INITIAL_NOTES) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          notesRepo.create(n as any);
-        }
         await flushDb(masterKey);
 
         const hash = await sha256Hex(`${mnemonic}|${hexOf(salt)}`);
