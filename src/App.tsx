@@ -10,20 +10,19 @@ import { useAuth } from './auth/AuthProvider';
 import { notesRepo } from './db/NotesRepository';
 import { flush as flushDb } from './db/DbClient';
 import { safeLog } from './security/logSanitizer';
-import { NoteItem, ContextCategory } from './types';
-import { Sparkles, Brain } from 'lucide-react';
+import { NoteItem, Category } from './types';
+import { Brain } from 'lucide-react';
 
 export default function App() {
   const { state, notes, refreshNotes, lock: lockAuth } = useAuth();
 
-  // State narrowed: si `state.kind !== 'active'`, es unreachable porque
-  // RootRouter ya renderiza otra cosa. Pero TypeScript necesita narrowing.
   if (state.kind !== 'active') return null;
 
   const { user, masterKey } = state;
 
-  const [activeCategory, setActiveCategory] = useState<ContextCategory>('Everywhere');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<Category | null>(null);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
 
   const [isCmdKOpen, setIsCmdKOpen] = useState(false);
@@ -32,12 +31,6 @@ export default function App() {
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'feed' | 'graph'>('feed');
 
-  // ───── Mutations: cada cambio muta notesRepo + hace flush cifrado ─────
-
-  /**
-   * Helper central: tras cualquier mutación del repositorio, refresca
-   * el estado React desde la DB y persiste el blob cifrado en IDB.
-   */
   const commitChanges = useCallback(async () => {
     try {
       refreshNotes();
@@ -47,55 +40,50 @@ export default function App() {
     }
   }, [masterKey, refreshNotes]);
 
-  // Category counts
+  // Category counts for FilterBar
   const categoryCounts = useMemo(() => {
-    const counts: Record<ContextCategory, number> = {
-      Everywhere: notes.length,
-      'Deep Work': 0,
-      Philosophical: 0,
-      Infrastructure: 0,
-      Visuals: 0,
-    };
-
+    const counts: Record<string, number> = {};
     notes.forEach((note) => {
-      if (counts[note.category] !== undefined) {
-        counts[note.category] += 1;
-      }
+      counts[note.category] = (counts[note.category] || 0) + 1;
     });
-
     return counts;
   }, [notes]);
 
-  // Filtered notes
+  // All unique tags (sorted alphabetically)
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    notes.forEach((note) => note.tags.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [notes]);
+
+  // Filtered notes: category → tag → search query (AND logic)
   const filteredNotes = useMemo(() => {
-    return notes.filter((note) => {
-      if (activeCategory !== 'Everywhere' && note.category !== activeCategory) {
-        return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+    let result = notes;
+
+    if (activeCategory) {
+      result = result.filter((note) => note.category === activeCategory);
+    }
+
+    if (activeTag) {
+      const tag = activeTag.toLowerCase();
+      result = result.filter((note) =>
+        note.tags.some((t) => t.toLowerCase() === tag),
+      );
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((note) => {
         const matchesTitle = note.title.toLowerCase().includes(q);
-        const matchesSummary = note.summary?.toLowerCase().includes(q);
+        const matchesContent = note.content.toLowerCase().includes(q);
         const matchesTag = note.tags.some((t) => t.toLowerCase().includes(q));
         const matchesCategory = note.category.toLowerCase().includes(q);
-        return matchesTitle || matchesSummary || matchesTag || matchesCategory;
-      }
-      return true;
-    });
-  }, [notes, activeCategory, searchQuery]);
+        return matchesTitle || matchesContent || matchesTag || matchesCategory;
+      });
+    }
 
-  // Handlers
-  const handleToggleChecklist = useCallback(
-    async (noteId: string, itemId: string) => {
-      try {
-        notesRepo.toggleChecklistItem(noteId, itemId);
-        await commitChanges();
-      } catch (e) {
-        safeLog.error('toggle checklist failed', e);
-      }
-    },
-    [commitChanges],
-  );
+    return result;
+  }, [notes, activeCategory, activeTag, searchQuery]);
 
   const handleTogglePin = useCallback(
     async (noteId: string) => {
@@ -128,8 +116,8 @@ export default function App() {
         notesRepo.create(newNote);
         await commitChanges();
         setSelectedNote(newNote);
-        setAiNotice(`New memory node "${newNote.title}" synced to 2B Brain.`);
-        setTimeout(() => setAiNotice(null), 4000);
+        setAiNotice(`"${newNote.title}" created.`);
+        setTimeout(() => setAiNotice(null), 3000);
       } catch (e) {
         safeLog.error('add note failed', e);
       }
@@ -151,45 +139,10 @@ export default function App() {
     [commitChanges, selectedNote?.id],
   );
 
-  const handleAiSynthesize = useCallback(
-    async (prompt: string) => {
-      setAiNotice(
-        `Local neural query running: "${prompt}"... Creating memory synthesis.`,
-      );
-      setTimeout(async () => {
-        try {
-          const generatedNote: NoteItem = {
-            id: `note-ai-${Date.now()}`,
-            title: `AI Synthesis: ${prompt.slice(0, 24)}...`,
-            type: 'architecture',
-            timestamp: 'JUST NOW',
-            category:
-              activeCategory === 'Everywhere' ? 'Infrastructure' : activeCategory,
-            summary: `Synthesised knowledge based on prompt "${prompt}". Cross-indexed with local WASM database ${notes.length} brain nodes.`,
-            tags: ['AI', 'SYNTHESIS', '2B'],
-            icon: 'memory',
-            connectedNodeIds: notes.slice(0, 3).map((n) => n.id),
-          };
-          notesRepo.create(generatedNote);
-          await commitChanges();
-          setSelectedNote(generatedNote);
-          setAiNotice('Neural memory node created.');
-          setTimeout(() => setAiNotice(null), 4000);
-        } catch (e) {
-          safeLog.error('AI synthesis failed', e);
-        }
-      }, 1500);
-    },
-    [activeCategory, commitChanges, notes],
-  );
-
   const handleLogout = useCallback(() => {
     lockAuth();
   }, [lockAuth]);
 
-  // Live snapshot del `inspectedNote` derivada desde `notes`. Esto evita
-  // un useEffect problemático que re-renderizaba en bucle comparando
-  // referencias objeto contra refs de `rowToNote` (siempre nuevas).
   const liveInspectedNote = useMemo(
     () =>
       inspectedNote
@@ -200,12 +153,10 @@ export default function App() {
 
   return (
     <div className="bg-[#0f0d15] text-[#f1f1f1] selection:bg-white/20 selection:text-white min-h-screen overflow-hidden flex flex-col font-sans">
-      {/* Background Radial Glow */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-15">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_#3b3742_0%,_transparent_100%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_#3b3742_0%,_transparent_100%)]" />
       </div>
 
-      {/* Header */}
       <Header
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -216,24 +167,24 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* AI Toast Banner */}
       {aiNotice && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-[#15121b] border border-[#c8bfff] text-white px-5 py-2.5 rounded-full shadow-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200">
-          <Sparkles className="w-4 h-4 text-[#c8bfff] animate-spin-slow" />
           <span>{aiNotice}</span>
         </div>
       )}
 
-      {/* Main Container */}
       <main className="relative z-10 pt-16 sm:pt-24 h-screen flex flex-col">
-        {/* Context Category Filters */}
+        {/* FilterBar: categorías + tags */}
         <FilterBar
           activeCategory={activeCategory}
           onSelectCategory={setActiveCategory}
+          activeTag={activeTag}
+          onSelectTag={setActiveTag}
           categoryCounts={categoryCounts}
+          allTags={allTags}
         />
 
-        {/* Mobile View Toggle (Feed vs Graph) */}
+        {/* Mobile View Toggle */}
         <div className="lg:hidden px-3 mb-2 shrink-0">
           <div className="bg-[#0f0d15] p-1 rounded-full border border-[#27272a] grid grid-cols-2 gap-1 text-xs font-bold">
             <button
@@ -243,7 +194,7 @@ export default function App() {
               }`}
             >
               <span className="material-symbols-outlined text-sm">view_agenda</span>
-              <span>Memories ({filteredNotes.length})</span>
+              <span>Notes ({filteredNotes.length})</span>
             </button>
             <button
               onClick={() => setMobileTab('graph')}
@@ -252,14 +203,13 @@ export default function App() {
               }`}
             >
               <span className="material-symbols-outlined text-sm">hub</span>
-              <span>Neural Graph</span>
+              <span>Graph</span>
             </button>
           </div>
         </div>
 
-        {/* Split Screen Layout matching prototype (1/3 feed, 2/3 2D brain graph) */}
         <div className="flex flex-1 overflow-hidden px-3 sm:px-8 pb-3 sm:pb-8 gap-4 lg:gap-8">
-          {/* Left Column: Note Feed (1/3) */}
+          {/* Feed */}
           <aside className={`w-full lg:w-1/3 flex-col gap-4 sm:gap-6 overflow-y-auto no-scrollbar pb-16 sm:pb-24 pr-1 ${
             mobileTab === 'feed' ? 'flex' : 'hidden lg:flex'
           }`}>
@@ -269,10 +219,7 @@ export default function App() {
                   <NoteCard
                     note={note}
                     isSelected={selectedNote?.id === note.id}
-                    onSelect={(n) => {
-                      setSelectedNote(n);
-                    }}
-                    onToggleChecklist={handleToggleChecklist}
+                    onSelect={(n) => setSelectedNote(n)}
                     onDeleteNote={handleDeleteNote}
                     onTogglePin={handleTogglePin}
                   />
@@ -281,21 +228,21 @@ export default function App() {
             ) : (
               <div className="p-8 text-center bg-[#1d1a23] border border-[#27272a] rounded-2xl space-y-3">
                 <Brain className="w-8 h-8 text-[#7e7576] mx-auto" />
-                <div className="text-sm font-bold text-white">No memory nodes found</div>
+                <div className="text-sm font-bold text-white">No notes yet</div>
                 <p className="text-xs text-[#7e7576]">
-                  Try adjusting your filter or search query, or create a new neural memory node.
+                  Create your first note to get started.
                 </p>
                 <button
                   onClick={() => setIsNewNoteOpen(true)}
                   className="px-4 py-2 rounded-full bg-white text-[#1b1b1b] font-bold text-xs hover:bg-neutral-200 transition-colors"
                 >
-                  Create Memory Node
+                  Create Note
                 </button>
               </div>
             )}
           </aside>
 
-          {/* Right Column: Interactive 2D Force Graph Workspace (2/3) */}
+          {/* Graph */}
           <div className={`w-full lg:w-2/3 h-full ${
             mobileTab === 'graph' ? 'block' : 'hidden lg:block'
           }`}>
@@ -306,16 +253,19 @@ export default function App() {
                 setSelectedNote(note);
                 setInspectedNote(note);
               }}
+              onSelectTag={(tag) => {
+                setActiveTag(tag);
+                setMobileTab('feed');
+              }}
               onSelectCategory={(category) => {
                 setActiveCategory(category);
+                setMobileTab('feed');
               }}
-              activeCategory={activeCategory}
             />
           </div>
         </div>
       </main>
 
-      {/* Cmd K Modal */}
       <CmdKModal
         isOpen={isCmdKOpen}
         onClose={() => setIsCmdKOpen(false)}
@@ -325,24 +275,19 @@ export default function App() {
           setInspectedNote(note);
         }}
         onOpenNewNote={() => setIsNewNoteOpen(true)}
-        onAiSynthesize={handleAiSynthesize}
       />
 
-      {/* New Note Modal */}
       <NewNoteModal
         isOpen={isNewNoteOpen}
         onClose={() => setIsNewNoteOpen(false)}
         onAddNote={handleAddNote}
-        existingNotes={notes}
       />
 
-      {/* Note Detail / Inspector Modal */}
       <NoteDetailModal
         note={liveInspectedNote}
         onClose={() => setInspectedNote(null)}
         onUpdateNote={handleUpdateNote}
         onDeleteNote={handleDeleteNote}
-        allNotes={notes}
       />
     </div>
   );
