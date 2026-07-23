@@ -1,34 +1,23 @@
-export type NoteType = 'architecture' | 'voice' | 'checklist' | 'visual' | 'entity' | 'text';
+export type Category = 'General' | 'Work' | 'Personal' | 'Ideas' | 'Learning';
 
-export type ContextCategory = 'Everywhere' | 'Deep Work' | 'Philosophical' | 'Infrastructure' | 'Visuals';
+export const CATEGORIES: Category[] = ['General', 'Work', 'Personal', 'Ideas', 'Learning'];
 
-export interface ChecklistItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
-export interface EntityMetric {
-  label: string;
-  value: number; // percentage 0-100
-}
+export const CATEGORY_COLORS: Record<Category, string> = {
+  General: '#f1f1f1',
+  Work: '#fe7674',
+  Personal: '#c8bfff',
+  Ideas: '#e5deff',
+  Learning: '#a3e635',
+};
 
 export interface NoteItem {
   id: string;
   title: string;
-  content?: string;
-  type: NoteType;
-  timestamp: string;
-  category: ContextCategory;
-  summary?: string;
+  content: string;
+  category: Category;
   tags: string[];
-  icon: string;
-  audioDuration?: string;
-  checklist?: ChecklistItem[];
-  imageUrl?: string;
-  entityMetric?: EntityMetric;
-  connectedNodeIds: string[];
-  isPinned?: boolean;
+  isPinned: boolean;
+  timestamp: string;
 }
 
 export interface GraphNodePosition {
