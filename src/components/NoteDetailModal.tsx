@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NoteItem, Category, CATEGORIES, CATEGORY_COLORS } from '../types';
+import { NoteItem, getCategoryColor, BUILTIN_CATEGORIES } from '../types';
 import { X, Pin, Trash2, Clock } from 'lucide-react';
 
 interface NoteDetailModalProps {
@@ -20,10 +20,10 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
-  const [category, setCategory] = useState<Category>(note.category);
+  const [category, setCategory] = useState<string>(note.category);
   const [tagsInput, setTagsInput] = useState(note.tags.join(', '));
 
-  const catColor = CATEGORY_COLORS[note.category];
+  const catColor = getCategoryColor(note.category);
 
   const handleSave = () => {
     onUpdateNote({
@@ -127,7 +127,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
                   Category
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {CATEGORIES.map((cat) => (
+                  {BUILTIN_CATEGORIES.map((cat) => (
                     <button
                       key={cat}
                       type="button"
@@ -140,7 +140,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
                     >
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+                        style={{ backgroundColor: getCategoryColor(cat) }}
                       />
                       {cat}
                     </button>

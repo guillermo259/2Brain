@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Category, CATEGORIES, CATEGORY_COLORS } from '../types';
+import { getCategoryColor, BUILTIN_CATEGORIES } from '../types';
 import { SlidersHorizontal, X, Check } from 'lucide-react';
 
 interface FilterBarProps {
-  activeCategory: Category | null;
-  onSelectCategory: (category: Category | null) => void;
+  activeCategory: string | null;
+  onSelectCategory: (category: string | null) => void;
   activeTag: string | null;
   onSelectTag: (tag: string | null) => void;
   categoryCounts: Record<string, number>;
@@ -67,10 +67,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                   Categories
                 </div>
                 <div className="space-y-0.5">
-                  {CATEGORIES.map((cat) => {
+                  {(Object.keys(categoryCounts).length > 0 ? Object.keys(categoryCounts) : BUILTIN_CATEGORIES).map((cat) => {
                     const isActive = activeCategory === cat;
                     const count = categoryCounts[cat] || 0;
-                    const color = CATEGORY_COLORS[cat];
+                    const color = getCategoryColor(cat);
 
                     return (
                       <button
@@ -158,12 +158,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <span
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border animate-in fade-in duration-150"
             style={{
-              color: CATEGORY_COLORS[activeCategory],
-              borderColor: CATEGORY_COLORS[activeCategory] + '60',
-              backgroundColor: CATEGORY_COLORS[activeCategory] + '15',
+              color: getCategoryColor(activeCategory),
+              borderColor: getCategoryColor(activeCategory) + '60',
+              backgroundColor: getCategoryColor(activeCategory) + '15',
             }}
           >
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[activeCategory] }} />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getCategoryColor(activeCategory) }} />
             {activeCategory}
             <button
               onClick={() => onSelectCategory(null)}

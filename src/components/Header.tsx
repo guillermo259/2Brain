@@ -11,6 +11,7 @@ interface HeaderProps {
   noteCount: number;
   currentUser?: UserAccount | null;
   onLogout?: () => void;
+  aiModelsReady?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,7 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   noteCount,
   currentUser,
-  onLogout
+  onLogout,
+  aiModelsReady = false,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -39,9 +41,13 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </div>
         <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 bg-[#1d1a23] rounded-full border border-[#27272a] shadow-inner">
-          <span className="w-2 h-2 rounded-full bg-[#fe7674] animate-pulse"></span>
+          <span className={`w-2 h-2 rounded-full ${
+            aiModelsReady
+              ? 'bg-[#34d399] shadow-[0_0_6px_#34d399]'
+              : 'bg-[#fe7674] animate-pulse'
+          }`}></span>
           <span className="text-[10px] text-[#cfc4c5] uppercase tracking-[0.2em] font-bold">
-            Neural Link: Online
+            {aiModelsReady ? 'Neural Synapse: Active' : 'Neural Link: Online'}
           </span>
         </div>
       </div>

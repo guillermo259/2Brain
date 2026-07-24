@@ -1,5 +1,5 @@
 import React from 'react';
-import { NoteItem, Category, CATEGORY_COLORS } from '../types';
+import { NoteItem, getCategoryColor } from '../types';
 import { Pin, Trash2 } from 'lucide-react';
 
 interface NoteCardProps {
@@ -17,7 +17,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   onDeleteNote,
   onTogglePin,
 }) => {
-  const catColor = CATEGORY_COLORS[note.category] || '#f1f1f1';
+  const catColor = getCategoryColor(note.category);
 
   return (
     <div

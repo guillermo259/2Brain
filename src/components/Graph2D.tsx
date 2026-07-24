@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
-import { NoteItem, Category, CATEGORIES, CATEGORY_COLORS } from '../types';
+import { NoteItem, getCategoryColor } from '../types';
 import { ZoomIn, ZoomOut, RotateCcw, Compass } from 'lucide-react';
 import { DotField } from './DotField';
 
@@ -9,7 +9,7 @@ interface Graph2DProps {
   selectedNoteId: string | null;
   onSelectNote: (note: NoteItem) => void;
   onSelectTag: (tag: string) => void;
-  onSelectCategory: (category: Category) => void;
+  onSelectCategory: (category: string) => void;
   /** Se incrementa cuando se quita un filtro para hacer zoom-to-fit. */
   fitTrigger: number;
 }
@@ -75,14 +75,16 @@ export const Graph2D: React.FC<Graph2DProps> = ({
     const nodeIdsSet = new Set<string>();
     const tagSet = new Set<string>();
 
-    // 1. Category hub nodes
-    CATEGORIES.forEach((cat) => {
+    // 1. Category hub nodes — dinámicos desde las notas
+    const categories = new Set<string>();
+    notes.forEach((n) => categories.add(n.category));
+    categories.forEach((cat) => {
       const id = `cat-${cat}`;
       nodes.push({
         id,
         label: cat,
         type: 'category',
-        color: CATEGORY_COLORS[cat] || '#ffffff',
+        color: getCategoryColor(cat),
         val: 18,
       });
       nodeIdsSet.add(id);
@@ -106,7 +108,7 @@ export const Graph2D: React.FC<Graph2DProps> = ({
         links.push({
           source: catNodeId,
           target: note.id,
-          color: CATEGORY_COLORS[note.category] || '#27272a',
+          color: getCategoryColor(note.category) || '#27272a',
           value: 2,
         });
       }
@@ -155,7 +157,7 @@ export const Graph2D: React.FC<Graph2DProps> = ({
           links.push({
             source: a.id,
             target: b.id,
-            color: CATEGORY_COLORS[a.category] || '#ffffff',
+            color: getCategoryColor(a.category) || '#ffffff',
             value: 0.3,
           });
         }
@@ -181,7 +183,7 @@ export const Graph2D: React.FC<Graph2DProps> = ({
         const tagName = (node.label as string).replace(/^#/, '');
         onSelectTag(tagName);
       } else if (node.type === 'category') {
-        onSelectCategory(node.label as Category);
+        onSelectCategory(node.label as string);
       }
     },
     [onSelectNote, onSelectTag, onSelectCategory],
