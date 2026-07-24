@@ -70,7 +70,6 @@ import type { NoteItem } from '../types';
 
 export interface UserAccount {
   name: string;
-  email: string;
   avatarInitials: string;
 }
 
@@ -109,6 +108,7 @@ export interface AuthContextValue {
   }) => Promise<void>;
   lock: () => void;
   wipe: () => Promise<void>;
+  updateUserName: (name: string) => void;
   setAutoLock: (setting: AutoLockSetting) => void;
   tryBiometricUnlock: () => Promise<boolean>;
   capabilities: { biometrics: boolean };
@@ -235,12 +235,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           masterKey,
           user: {
             name: name.trim() || 'You',
-            email: '',
             avatarInitials: makeInitials(name),
           },
           autoLock: 'minute5',
         });
         stateAlreadySet = true;
+
+        // Persistir perfil + auth method en meta table.
+        const parts = name.trim().split(/\s+/);
+        writeProfileToMeta(parts[0] || 'You', parts.slice(1).join(' '));
+        writeAuthMethodToMeta('pin');
       } catch (err) {
         // Rollback total: si cualquier paso falló, no debe quedar un vault
         // parcial que haga creer al usuario que completó el setup.
@@ -301,11 +305,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           masterKey,
           user: {
             name: name.trim() || 'You',
-            email: '',
             avatarInitials: makeInitials(name),
           },
           autoLock: 'minute5',
         });
+
+        // Persistir perfil + auth method en meta table.
+        const parts = name.trim().split(/\s+/);
+        writeProfileToMeta(parts[0] || 'You', parts.slice(1).join(' '));
+        writeAuthMethodToMeta('seed');
       } catch (err) {
         safeLog.error('completeSetupFromSeed failed; wiping vault', err);
         await safeWipeCipher();
@@ -332,10 +340,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const masterKey = await deriveKdk(pin, vault.master_salt);
       await openDatabase(masterKey, { fresh: false });
       masterKeyRef.current = masterKey;
+
+      // Leer perfil persistido de la DB.
+      const profile = readProfileFromMeta();
+      const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'You';
+
       setState({
         kind: 'active',
         masterKey,
-        user: { name: 'You', email: '', avatarInitials: 'YOU' },
+        user: { name: fullName, avatarInitials: makeInitials(fullName) },
         autoLock: readAutoLockFromMeta() ?? 'minute5',
       });
     } catch (e) {
@@ -376,6 +389,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Bugfix #7: side effects se ejecutan DESPUÉS de leer la snapshot
   // del state actual, no dentro del updater.
+  const updateUserName: AuthContextValue['updateUserName'] = useCallback((name: string) => {
+    // Persistir en la DB para que sobreviva a reloads.
+    const parts = name.trim().split(/\s+/);
+    writeProfileToMeta(parts[0] || 'You', parts.slice(1).join(' '));
+
+    setState((prev) => {
+      if (prev.kind !== 'active') return prev;
+      const initials = makeInitials(name);
+      return {
+        ...prev,
+        user: { ...prev.user, name, avatarInitials: initials },
+      };
+    });
+  }, []);
+
   const setAutoLock: AuthContextValue['setAutoLock'] = useCallback((s) => {
     setState((prev) => {
       if (prev.kind !== 'active') return prev;
@@ -407,6 +435,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       completeSetupFromSeed,
       lock,
       wipe,
+      updateUserName,
       setAutoLock,
       tryBiometricUnlock,
       capabilities,
@@ -421,6 +450,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       completeSetupFromSeed,
       lock,
       wipe,
+      updateUserName,
       setAutoLock,
       tryBiometricUnlock,
     ],
@@ -495,6 +525,47 @@ function readAutoLockFromMeta(): AutoLockSetting | null {
     return null;
   } catch {
     return null;
+  }
+}
+
+// ───── Profile persistence (meta table) ─────
+
+function readProfileFromMeta(): { firstName: string; lastName: string } {
+  try {
+    if (!dbIsOpen()) return { firstName: 'You', lastName: '' };
+    const fn = dbQueryAll<{ value: string }>(
+      'SELECT value FROM meta WHERE key = ?',
+      ['profile_first_name'],
+    );
+    const ln = dbQueryAll<{ value: string }>(
+      'SELECT value FROM meta WHERE key = ?',
+      ['profile_last_name'],
+    );
+    return {
+      firstName: fn[0]?.value || 'You',
+      lastName: ln[0]?.value || '',
+    };
+  } catch {
+    return { firstName: 'You', lastName: '' };
+  }
+}
+
+function writeAuthMethodToMeta(method: 'pin' | 'seed'): void {
+  try {
+    if (!dbIsOpen()) return;
+    execSql('INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)', ['auth_method', method]);
+  } catch {
+    /* ignore */
+  }
+}
+
+function writeProfileToMeta(firstName: string, lastName: string): void {
+  try {
+    if (!dbIsOpen()) return;
+    execSql('INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)', ['profile_first_name', firstName.trim() || 'You']);
+    execSql('INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)', ['profile_last_name', lastName.trim()]);
+  } catch {
+    /* ignore — best-effort persistence */
   }
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, Plus, Sparkles, Cpu, LogOut } from 'lucide-react';
+import { Search, Bell, Plus, Sparkles, Cpu, LogOut, Settings } from 'lucide-react';
 import type { UserAccount } from '../auth/AuthProvider';
 
 interface HeaderProps {
@@ -7,6 +7,7 @@ interface HeaderProps {
   setSearchQuery: (query: string) => void;
   onOpenCmdK: () => void;
   onOpenNewNote: () => void;
+  onOpenSettings: () => void;
   noteCount: number;
   currentUser?: UserAccount | null;
   onLogout?: () => void;
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   setSearchQuery,
   onOpenCmdK,
   onOpenNewNote,
+  onOpenSettings,
   noteCount,
   currentUser,
   onLogout
@@ -25,7 +27,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const userName = currentUser?.name || 'You';
-  const userEmail = currentUser?.email || 'guest@2brain.ai';
   const userInitials = currentUser?.avatarInitials || 'YB';
 
   return (
@@ -157,10 +158,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-bold text-white truncate">{userName}</div>
-                  <div className="text-[11px] text-[#7e7576] truncate">{userEmail}</div>
+                  <div className="text-[11px] text-[#7e7576] truncate">Brain User</div>
                 </div>
               </div>
               <div className="space-y-1 text-xs">
+                <div
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onOpenSettings();
+                  }}
+                  className="px-3 py-2 rounded-xl hover:bg-[#1d1a23] text-[#cfc4c5] flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Settings</span>
+                </div>
                 <div className="px-3 py-2 rounded-xl bg-[#1d1a23] text-[#cfc4c5] flex justify-between items-center">
                   <span>Brain Capacity</span>
                   <span className="font-bold text-white">6.4 GB / 100 GB</span>
