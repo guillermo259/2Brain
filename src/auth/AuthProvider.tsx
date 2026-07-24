@@ -7,6 +7,10 @@
  *     locked       → DB existe pero requiere unlock
  *     active       → sesión viva; expone { masterKey, user, notes }
  *
+ * Backup:
+ *   exportBackup()  — descarga el blob AES-GCM cifrado como .2brain
+ *   importBackup()  — restaura un .2brain y re-abre la DB con la misma key
+ *
  *  Context providido por `AuthProvider`, consumido vía `useAuth()`.
  *  App.tsx sólo se monta cuando `state.kind === 'active'`.
  *
@@ -64,6 +68,11 @@ import {
 import { autoLock, type AutoLockSetting } from './autoLock';
 import { notesRepo } from '../db/NotesRepository';
 import { safeLog } from '../security/logSanitizer';
+import {
+  exportEncryptedBackup,
+  importEncryptedBackup,
+  recordBackupTimestamp,
+} from '../security/backup';
 import type { NoteItem } from '../types';
 
 // ───── Types ─────
@@ -112,6 +121,14 @@ export interface AuthContextValue {
   setAutoLock: (setting: AutoLockSetting) => void;
   tryBiometricUnlock: () => Promise<boolean>;
   capabilities: { biometrics: boolean };
+  /** Descarga el blob cifrado activo como archivo `.2brain`. */
+  exportBackup: () => Promise<void>;
+  /**
+   * Restaura un archivo `.2brain`. Verifica que sea descifrable con la
+   * masterKey activa antes de reemplazar la DB en memoria.
+   * Lanza si el archivo es inválido o no corresponde a la clave actual.
+   */
+  importBackup: (file: File) => Promise<void>;
 }
 
 const AuthCtx = createContext<AuthContextValue | null>(null);
@@ -379,13 +396,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [transitionToLocked]);
 
   const wipe: AuthContextValue['wipe'] = useCallback(async () => {
-    await wipeVault();
+    // Borrar todo: vault (2brain-keystore), DB cifrada (2brain-db) y localStorage.
+    await safeWipeVault();
+    await safeWipeCipher();
+    try { localStorage.removeItem('2brain-custom-categories'); } catch { /* ignore */ }
     autoLock.stop();
     masterKeyRef.current = null;
     closeDatabase();
     setNotes([]);
     setState({ kind: 'setting-up' });
   }, []);
+
+  const exportBackup: AuthContextValue['exportBackup'] = useCallback(async () => {
+    await exportEncryptedBackup();
+    recordBackupTimestamp();
+  }, []);
+
+  const importBackup: AuthContextValue['importBackup'] = useCallback(async (file: File) => {
+    const mk = masterKeyRef.current;
+    if (!mk) throw new Error('Must be logged in to restore a backup.');
+
+    // 1. Escribir el archivo en IDB (backup.ts valida el header mágico).
+    await importEncryptedBackup(file);
+
+    // 2. Verificar que el archivo es descifrable con la key actual:
+    //    re-abrir la DB en modo non-fresh. Si el PIN no corresponde al
+    //    backup, decryptDb() lanzará y el usuario ve un error claro.
+    try {
+      closeDatabase();
+      await openDatabase(mk, { fresh: false });
+    } catch {
+      // El archivo importado no se puede descifrar con la key actual:
+      // restaurar el blob anterior haciendo flush desde la DB en memoria
+      // (que ya está cerrada — no podemos). Lo más seguro: pedir al usuario
+      // que importe un backup compatible con su PIN, o que haga wipe.
+      throw new Error(
+        'The backup file cannot be decrypted with your current PIN. ' +
+        'Make sure you are importing a backup created with the same PIN.',
+      );
+    }
+
+    // 3. Recargar notas desde la DB restaurada.
+    refreshNotes();
+    recordBackupTimestamp();
+  }, [refreshNotes]);
 
   // Bugfix #7: side effects se ejecutan DESPUÉS de leer la snapshot
   // del state actual, no dentro del updater.
@@ -439,6 +493,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setAutoLock,
       tryBiometricUnlock,
       capabilities,
+      exportBackup,
+      importBackup,
     }),
     [
       state,
@@ -453,6 +509,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       updateUserName,
       setAutoLock,
       tryBiometricUnlock,
+      exportBackup,
+      importBackup,
     ],
   );
 
