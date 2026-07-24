@@ -254,6 +254,27 @@ MIT. Eres libre de usar, modificar y extender 2Brain.
 
 ## Changelog
 
+### [1.0.1] - 2026-07-25
+
+#### Agregado
+- Re-indexación de embeddings: botones "Index missing" + "Re-index all" en Settings con barra de progreso
+- Búsqueda semántica híbrida: combina keywords y vectorial (cosine similarity)
+- Configuración de AI provider: selector de 4 proveedores en Settings con test de conexión
+- Modal Settings completo: perfil, PIN, categorías, AI config, re-index
+
+#### Corregido
+- Proxy CORS para APIs de IA en Vite dev server
+- Header responsive optimizado
+- Parsing robusto de respuestas LLM con fallback multilinivel
+- Wipe completo: vault, DB cifrada y localStorage
+
+#### Cambiado
+- README reescrito con información precisa del código actual
+- Estructura de dependencias verificada (@huggingface/transformers como dependency real)
+- Documentación mejorada con stack técnico exacto
+
+---
+
 ### [1.0.0] - 2026-07-24
 
 #### Agregado
