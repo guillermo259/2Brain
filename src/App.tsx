@@ -23,7 +23,19 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [fitTrigger, setFitTrigger] = useState(0);
   const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null);
+
+  // Wrappers que incrementan fitTrigger cuando se limpia un filtro
+  const handleSetCategory = useCallback((cat: Category | null) => {
+    setActiveCategory(cat);
+    if (cat === null) setFitTrigger((n) => n + 1);
+  }, []);
+
+  const handleSetTag = useCallback((tag: string | null) => {
+    setActiveTag(tag);
+    if (tag === null) setFitTrigger((n) => n + 1);
+  }, []);
 
   const [isCmdKOpen, setIsCmdKOpen] = useState(false);
   const [isNewNoteOpen, setIsNewNoteOpen] = useState(false);
@@ -177,9 +189,9 @@ export default function App() {
         {/* FilterBar: categorías + tags */}
         <FilterBar
           activeCategory={activeCategory}
-          onSelectCategory={setActiveCategory}
+          onSelectCategory={handleSetCategory}
           activeTag={activeTag}
-          onSelectTag={setActiveTag}
+          onSelectTag={handleSetTag}
           categoryCounts={categoryCounts}
           allTags={allTags}
         />
@@ -249,6 +261,7 @@ export default function App() {
             <Graph2D
               notes={filteredNotes}
               selectedNoteId={selectedNote?.id || null}
+              fitTrigger={fitTrigger}
               onSelectNote={(note) => {
                 setSelectedNote(note);
                 setInspectedNote(note);

@@ -10,6 +10,8 @@ interface Graph2DProps {
   onSelectNote: (note: NoteItem) => void;
   onSelectTag: (tag: string) => void;
   onSelectCategory: (category: Category) => void;
+  /** Se incrementa cuando se quita un filtro para hacer zoom-to-fit. */
+  fitTrigger: number;
 }
 
 interface CustomGraphNode {
@@ -36,6 +38,7 @@ export const Graph2D: React.FC<Graph2DProps> = ({
   onSelectNote,
   onSelectTag,
   onSelectCategory,
+  fitTrigger,
 }) => {
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -192,6 +195,17 @@ export const Graph2D: React.FC<Graph2DProps> = ({
       fgRef.current.zoom(3.5, 1000);
     }
   }, [selectedNoteId, graphData]);
+
+  // Zoom-to-fit cuando se quita un filtro (fitTrigger incrementa).
+  // No corre en el primer render (fitTrigger inicia en 0).
+  useEffect(() => {
+    if (fitTrigger > 0 && fgRef.current) {
+      const id = setTimeout(() => {
+        fgRef.current?.zoomToFit(800, 40);
+      }, 400);
+      return () => clearTimeout(id);
+    }
+  }, [fitTrigger]);
 
   const handleRenderNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
