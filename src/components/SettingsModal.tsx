@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { CATEGORY_COLORS, type Category } from '../types';
+import { getCategoryColor, BUILTIN_CATEGORIES } from '../types';
 import { useAuth } from '../auth/AuthProvider';
 import { deriveKdk } from '../security/kdf';
 import { readVault, setMasterSalt } from '../security/keystore';
@@ -11,6 +11,11 @@ import {
   X, KeyRound, Tag, Cpu, ShieldCheck, ChevronRight,
   Download, Trash2, HardDrive, Plus, Pencil, Check, User, Upload, Shield,
 } from 'lucide-react';
+import {
+  getAiProvider, setAiProvider as setAiProviderStorage,
+  getAiApiKey, setAiApiKey as setAiApiKeyStorage,
+  AI_PROVIDERS, type AiProvider, hasApiKey,
+} from '../ai/LlmService';
 
 type SettingsTab = 'profile' | 'pin' | 'categories' | 'ai-model' | 'backup';
 
@@ -45,9 +50,8 @@ function saveCustomCategories(cats: string[]): void {
 }
 
 function getAllCategories(): string[] {
-  const builtin: Category[] = ['General', 'Work', 'Personal', 'Ideas', 'Learning'];
   const custom = loadCustomCategories();
-  return [...builtin, ...custom];
+  return [...BUILTIN_CATEGORIES, ...custom];
 }
 
 // ───── Main Modal ─────
@@ -440,7 +444,7 @@ function CategoriesTab() {
   const [newCatInput, setNewCatInput] = useState('');
 
   const allCats = getAllCategories();
-  const builtin: Category[] = ['General', 'Work', 'Personal', 'Ideas', 'Learning'];
+  const builtin: string[] = ['General', 'Work', 'Personal', 'Ideas', 'Learning'];
 
   const handleRename = (oldName: string) => {
     const trimmed = editValue.trim();
@@ -474,12 +478,7 @@ function CategoriesTab() {
     saveCustomCategories(updated);
   };
 
-  // Assign rotating colors to custom categories
-  const colorPool = ['#fe7674', '#c8bfff', '#e5deff', '#a3e635', '#fbbf24', '#34d399', '#60a5fa'];
-  const getColor = (name: string, idx: number) => {
-    if (name in CATEGORY_COLORS) return CATEGORY_COLORS[name as Category];
-    return colorPool[idx % colorPool.length];
-  };
+  const getColor = (name: string, _idx: number) => getCategoryColor(name);
 
   return (
     <div className="space-y-4">
@@ -493,7 +492,7 @@ function CategoriesTab() {
       <div className="space-y-2">
         {allCats.map((cat, idx) => {
           const color = getColor(cat, idx);
-          const isBuiltin = builtin.includes(cat as Category);
+          const isBuiltin = builtin.includes(cat);
 
           return (
             <div
@@ -574,124 +573,187 @@ function CategoriesTab() {
 // ───── AI Model Tab ─────
 
 function AiModelTab() {
-  const [modelStatus, setModelStatus] = useState<'not-downloaded' | 'downloading' | 'installed'>('not-downloaded');
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [provider, setProvider] = useState<AiProvider>(getAiProvider());
+  const [apiKey, setApiKeyState] = useState<string>(getAiApiKey(getAiProvider()) || '');
+  const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
+  const selectedProvider = AI_PROVIDERS.find((p) => p.id === provider)!;
+  const keyFromEnv = !!((import.meta as any).env?.[selectedProvider.envVar]?.trim());
 
-  const handleDownload = () => {
-    setModelStatus('downloading');
-    setDownloadProgress(0);
-    intervalRef.current = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 100) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          intervalRef.current = null;
-          setModelStatus('installed');
-          return 100;
-        }
-        return prev + Math.random() * 15 + 3;
-      });
-    }, 600);
+  // When provider changes, load its stored key and persist selection
+  const handleProviderChange = (id: AiProvider) => {
+    setProvider(id);
+    setAiProviderStorage(id); // Persist immediately so classify() uses this provider
+    setApiKeyState(getAiApiKey(id) || '');
+    setTestResult(null);
   };
 
-  const handleDelete = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const handleSave = () => {
+    setAiProviderStorage(provider);
+    if (apiKey.trim()) setAiApiKeyStorage(apiKey.trim(), provider);
+    setSaved(true);
+    setTestResult(null);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleTest = async () => {
+    const keyToTest = apiKey.trim() || getAiApiKey(provider);
+    if (!keyToTest) return;
+    setTesting(true);
+    setTestResult(null);
+    setTestError(null);
+
+    try {
+      const response = await fetch(`${selectedProvider.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${keyToTest}`,
+        },
+        body: JSON.stringify({
+          model: selectedProvider.model,
+          messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
+          max_tokens: 10,
+          temperature: 0,
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${body.slice(0, 100)}`);
+      }
+
+      setTestResult('success');
+    } catch (err) {
+      setTestResult('error');
+      setTestError((err as Error).message);
+    } finally {
+      setTesting(false);
     }
-    setModelStatus('not-downloaded');
-    setDownloadProgress(0);
   };
 
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <h3 className="text-base font-bold text-white">AI Model</h3>
+        <h3 className="text-base font-bold text-white">AI Classification</h3>
         <p className="text-xs text-[#7e7576]">
-          Manage the local Gemma 4 2B model for on-device AI processing.
+          Choose a cloud AI provider for note classification. All offer free tiers. Your API key stays on your device.
         </p>
       </div>
 
-      <div className="p-4 rounded-2xl bg-[#1d1a23] border border-[#27272a] space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#c8bfff]/15 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-[#c8bfff]" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-white">Gemma 4 2B</div>
-              <div className="text-[10px] text-[#7e7576]">Quantized · ~1.8 GB</div>
-            </div>
-          </div>
-
-          {modelStatus === 'installed' && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30">
-              Installed
-            </span>
-          )}
-          {modelStatus === 'not-downloaded' && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#27272a] text-[#7e7576] border border-[#27272a]">
-              Not installed
-            </span>
-          )}
-        </div>
-
-        {modelStatus === 'downloading' && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-[10px]">
-              <span className="text-[#c8bfff] font-bold">Downloading...</span>
-              <span className="text-[#7e7576]">{Math.min(Math.round(downloadProgress), 100)}%</span>
-            </div>
-            <div className="w-full h-2 bg-[#27272a] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#c8bfff] rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(downloadProgress, 100)}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-[#7e7576]">
-              {(1.8 * downloadProgress / 100).toFixed(1)} GB / 1.8 GB
-            </p>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          {modelStatus === 'not-downloaded' && (
+      {/* Provider selection */}
+      <div className="space-y-2">
+        <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider">
+          Provider
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {AI_PROVIDERS.map((p) => (
             <button
-              onClick={handleDownload}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#c8bfff] text-[#190262] font-bold text-xs hover:bg-white transition-colors"
+              key={p.id}
+              onClick={() => handleProviderChange(p.id)}
+              className={`p-3 rounded-xl border text-left transition-all relative ${
+                provider === p.id
+                  ? 'border-white bg-white/5'
+                  : 'border-[#27272a] bg-[#1d1a23] hover:border-[#7e7576]'
+              }`}
             >
-              <Download className="w-4 h-4" />
-              Download Model
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                {p.name}
+                {hasApiKey(p.id) && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#34d399]" />
+                )}
+              </div>
+              <div className="text-[10px] text-[#7e7576] mt-0.5">{p.description}</div>
             </button>
-          )}
-          {modelStatus === 'downloading' && (
-            <button disabled className="flex-1 py-2.5 rounded-xl bg-[#27272a] text-[#7e7576] font-bold text-xs cursor-wait">
-              Downloading...
-            </button>
-          )}
-          {modelStatus === 'installed' && (
-            <button
-              onClick={handleDelete}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#fe7674]/15 border border-[#fe7674]/30 text-[#fe7674] font-bold text-xs hover:bg-[#fe7674]/25 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Model
-            </button>
-          )}
+          ))}
         </div>
       </div>
 
+      {/* API Key input */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider">
+            API Key
+          </label>
+          <a
+            href={selectedProvider.keyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-[#c8bfff] hover:text-white transition-colors"
+          >
+            Get free key →
+          </a>
+        </div>
+
+        {keyFromEnv ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs">
+            <ShieldCheck className="w-4 h-4" />
+            Key loaded from <code className="font-mono text-white">.env</code> ({selectedProvider.envVar})
+          </div>
+        ) : (
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => { setApiKeyState(e.target.value); setTestResult(null); }}
+            placeholder={`Paste your ${selectedProvider.name} API key...`}
+            className="w-full bg-[#1d1a23] border border-[#27272a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition-colors font-mono"
+          />
+        )}
+      </div>
+
+      {/* Test result */}
+      {testResult === 'success' && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-xs">
+          <ShieldCheck className="w-4 h-4" />
+          Connection successful. AI classification is ready.
+        </div>
+      )}
+      {testResult === 'error' && (
+        <div className="px-4 py-3 rounded-xl bg-[#fe7674]/15 border border-[#fe7674]/40 text-[#fe7674] text-xs break-all">
+          {testError || 'Connection failed. Check your API key.'}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleTest}
+          disabled={(!apiKey.trim() && !keyFromEnv) || testing}
+          className="flex-1 py-3 rounded-xl bg-[#1d1a23] border border-[#27272a] text-white font-bold text-xs hover:border-white transition-all disabled:opacity-40"
+        >
+          {testing ? 'Testing...' : 'Test Connection'}
+        </button>
+        {!keyFromEnv && (
+          <button
+            onClick={handleSave}
+            disabled={!apiKey.trim()}
+            className="flex-1 py-3 rounded-xl bg-white text-[#1b1b1b] font-bold text-xs hover:bg-neutral-200 transition-all disabled:opacity-40"
+          >
+            {saved ? 'Saved ✓' : 'Save'}
+          </button>
+        )}
+      </div>
+
+      {/* Model info */}
       <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1d1a23] border border-[#27272a] text-xs">
-        <HardDrive className="w-4 h-4 text-[#7e7576] shrink-0" />
-        <span className="text-[#cfc4c5]">Available storage: </span>
-        <span className="font-bold text-white">6.4 GB / 100 GB</span>
+        <Cpu className="w-4 h-4 text-[#7e7576] shrink-0" />
+        <span className="text-[#cfc4c5]">Model: </span>
+        <span className="font-bold text-white font-mono">{selectedProvider.model}</span>
+      </div>
+
+      {/* Env var hint */}
+      <div className="px-4 py-3 rounded-xl bg-[#1d1a23] border border-[#27272a] text-[11px] text-[#7e7576] leading-relaxed space-y-1">
+        <p className="font-bold text-[#cfc4c5]">Alternative: use .env file</p>
+        <p>
+          Create a <code className="text-[#c8bfff]">.env</code> file in the project root with:
+        </p>
+        <code className="block text-[#c8bfff] font-mono text-[10px] mt-1">
+          {selectedProvider.envVar}="your-key-here"
+        </code>
       </div>
     </div>
   );
