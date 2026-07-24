@@ -93,7 +93,7 @@ Lo único que necesitas es escribir. La IA:
 
 ### 1. Clonar y preparar
 ```bash
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/guillermo259/2Brain
 cd 2Brain
 pnpm install
 ```
