@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Category, CATEGORIES, CATEGORY_COLORS } from '../types';
-import { X } from 'lucide-react';
+import { SlidersHorizontal, X, Check } from 'lucide-react';
 
 interface FilterBarProps {
   activeCategory: Category | null;
@@ -19,90 +19,173 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   categoryCounts,
   allTags,
 }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const hasFilters = activeCategory !== null || activeTag !== null;
+
+  // Cerrar al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
   return (
-    <section className="px-3 sm:px-8 py-2 sm:py-4 shrink-0">
-      {/* Categories row */}
-      <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar py-1 touch-pan-x">
-        {/* "All" button */}
-        <button
-          onClick={() => onSelectCategory(null)}
-          className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-full font-bold text-xs sm:text-sm transition-all duration-200 shrink-0 flex items-center gap-2 ${
-            activeCategory === null
-              ? 'bg-white text-[#1b1b1b] shadow-lg scale-105'
-              : 'bg-[#0f0d15] border border-[#27272a] text-[#f1f1f1] hover:bg-[#1d1a23] hover:border-[#7e7576]'
-          }`}
-        >
-          <span>All</span>
-        </button>
+    <section className="px-3 sm:px-8 py-2 sm:py-3 shrink-0" ref={panelRef}>
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Filter button */}
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs transition-all ${
+              isOpen || hasFilters
+                ? 'bg-white text-[#1b1b1b] shadow-lg'
+                : 'bg-[#1d1a23] border border-[#27272a] text-[#cfc4c5] hover:border-[#7e7576] hover:text-white'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Filter</span>
+            {hasFilters && (
+              <span className="w-5 h-5 rounded-full bg-[#fe7674] text-white text-[10px] flex items-center justify-center font-bold">
+                {(activeCategory ? 1 : 0) + (activeTag ? 1 : 0)}
+              </span>
+            )}
+          </button>
 
-        {CATEGORIES.map((category) => {
-          const isActive = activeCategory === category;
-          const count = categoryCounts[category] || 0;
-          const color = CATEGORY_COLORS[category];
+          {/* Dropdown panel */}
+          {isOpen && (
+            <div className="absolute top-full mt-2 left-0 w-64 bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Categories section */}
+              <div className="p-3">
+                <div className="text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-2 px-1">
+                  Categories
+                </div>
+                <div className="space-y-0.5">
+                  {CATEGORIES.map((cat) => {
+                    const isActive = activeCategory === cat;
+                    const count = categoryCounts[cat] || 0;
+                    const color = CATEGORY_COLORS[cat];
 
-          return (
-            <button
-              key={category}
-              onClick={() => onSelectCategory(isActive ? null : category)}
-              className={`px-4 sm:px-6 py-1.5 sm:py-2 rounded-full font-bold text-xs sm:text-sm transition-all duration-200 shrink-0 flex items-center gap-2 ${
-                isActive
-                  ? 'bg-white text-[#1b1b1b] shadow-lg scale-105'
-                  : 'bg-[#0f0d15] border border-[#27272a] text-[#f1f1f1] hover:bg-[#1d1a23] hover:border-[#7e7576]'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-              <span>{category}</span>
-              {count > 0 && (
-                <span className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
-                  isActive ? 'bg-[#1b1b1b]/10 text-[#1b1b1b]' : 'bg-[#27272a] text-[#cfc4c5]'
-                }`}>
-                  {count}
-                </span>
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => {
+                          onSelectCategory(isActive ? null : cat);
+                          setIsOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                          isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-[#cfc4c5] hover:bg-[#1d1a23] hover:text-white'
+                        }`}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-[#15121b]"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="flex-1 text-left">{cat}</span>
+                        <span className="text-[10px] text-[#7e7576] tabular-nums">{count}</span>
+                        {isActive && <Check className="w-4 h-4 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tags section */}
+              {allTags.length > 0 && (
+                <>
+                  <div className="border-t border-[#27272a]" />
+                  <div className="p-3">
+                    <div className="text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-2 px-1">
+                      Tags
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {allTags.map((tag) => {
+                        const isActive = activeTag === tag;
+                        return (
+                          <button
+                            key={tag}
+                            onClick={() => {
+                              onSelectTag(isActive ? null : tag);
+                              setIsOpen(false);
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                              isActive
+                                ? 'bg-[#c8bfff] text-[#190262]'
+                                : 'bg-[#1d1a23] border border-[#27272a] text-[#cfc4c5] hover:border-[#c8bfff]/60 hover:text-[#c8bfff]'
+                            }`}
+                          >
+                            #{tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
               )}
-            </button>
-          );
-        })}
-      </div>
 
-      {/* Tags row (only show if we have tags) */}
-      {allTags.length > 0 && (
-        <div className="flex items-center gap-2 mt-2 overflow-x-auto no-scrollbar py-1 touch-pan-x">
-          {allTags.map((tag) => {
-            const isActive = activeTag === tag;
-            return (
-              <button
-                key={tag}
-                onClick={() => onSelectTag(isActive ? null : tag)}
-                className={`px-3 py-1 rounded-full font-bold text-[10px] sm:text-xs transition-all duration-200 shrink-0 ${
-                  isActive
-                    ? 'bg-[#c8bfff] text-[#190262] shadow-lg'
-                    : 'bg-[#1d1a23] border border-[#27272a] text-[#cfc4c5] hover:border-[#c8bfff]/60 hover:text-[#c8bfff]'
-                }`}
-              >
-                #{tag}
-              </button>
-            );
-          })}
+              {/* Clear all */}
+              {hasFilters && (
+                <>
+                  <div className="border-t border-[#27272a]" />
+                  <div className="p-3">
+                    <button
+                      onClick={() => {
+                        onSelectCategory(null);
+                        onSelectTag(null);
+                        setIsOpen(false);
+                      }}
+                      className="w-full py-2 rounded-xl text-[10px] font-bold text-[#7e7576] hover:text-[#fe7674] hover:bg-[#fe7674]/10 transition-colors"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Combined active filter indicator */}
-      {(activeCategory || activeTag) && (
-        <div className="flex items-center gap-2 mt-2">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#27272a]/60 text-[10px] text-[#cfc4c5]">
-            <span>Filtering by:</span>
-            {activeCategory && <span className="font-bold text-white">{activeCategory}</span>}
-            {activeCategory && activeTag && <span className="text-[#7e7576]">+</span>}
-            {activeTag && <span className="font-bold text-[#c8bfff]">#{activeTag}</span>}
+        {/* Active filter badges */}
+        {activeCategory && (
+          <span
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border animate-in fade-in duration-150"
+            style={{
+              color: CATEGORY_COLORS[activeCategory],
+              borderColor: CATEGORY_COLORS[activeCategory] + '60',
+              backgroundColor: CATEGORY_COLORS[activeCategory] + '15',
+            }}
+          >
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[activeCategory] }} />
+            {activeCategory}
             <button
-              onClick={() => { onSelectCategory(null); onSelectTag(null); }}
-              className="ml-1 p-0.5 rounded-full hover:bg-white/10 transition-colors"
+              onClick={() => onSelectCategory(null)}
+              className="ml-0.5 hover:opacity-70 transition-opacity"
             >
               <X className="w-3 h-3" />
             </button>
-          </div>
-        </div>
-      )}
+          </span>
+        )}
+
+        {activeTag && (
+          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold bg-[#c8bfff]/15 border border-[#c8bfff]/30 text-[#c8bfff] animate-in fade-in duration-150">
+            #{activeTag}
+            <button
+              onClick={() => onSelectTag(null)}
+              className="ml-0.5 hover:opacity-70 transition-opacity"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        )}
+      </div>
     </section>
   );
 };
