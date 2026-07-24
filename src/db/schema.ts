@@ -11,6 +11,30 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 `;
 
+export const SCHEMA_V2_ADD_COLUMNS = [
+  `ALTER TABLE notes ADD COLUMN embedding BLOB;`,
+  `ALTER TABLE notes ADD COLUMN auto_categorized INTEGER NOT NULL DEFAULT 0;`,
+];
+
+export const SCHEMA_V2_PIPELINE_LOG = `
+CREATE TABLE IF NOT EXISTS pipeline_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id    TEXT NOT NULL,
+    stage      TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    input_json TEXT,
+    output_json TEXT,
+    error      TEXT,
+    duration_ms INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+);
+`;
+
+export const SCHEMA_V2_INDEX_PIPELINE = `
+CREATE INDEX IF NOT EXISTS idx_pipeline_log_note_id ON pipeline_log(note_id);
+`;
+
 export const SCHEMA_V1_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_notes_category   ON notes(category);
 CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);

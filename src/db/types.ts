@@ -1,4 +1,4 @@
-import type { NoteItem, Category } from '../types';
+import type { NoteItem } from '../types';
 
 export interface NoteRow {
   id: string;
@@ -19,7 +19,7 @@ export function rowToNote(row: NoteRow): NoteItem {
     id: row.id,
     title: row.title,
     content: row.content,
-    category: row.category as Category,
+    category: row.category,
     tags,
     isPinned: row.is_pinned === 1,
     timestamp,
@@ -29,7 +29,7 @@ export function rowToNote(row: NoteRow): NoteItem {
 export interface NewNoteInput {
   title: string;
   content?: string;
-  category?: Category;
+  category?: string;
   tags?: string[];
   isPinned?: boolean;
 }

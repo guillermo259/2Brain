@@ -10,7 +10,12 @@
  */
 
 import type { Database } from 'sql.js';
-import { SCHEMA_V1_ALL } from './schema';
+import {
+  SCHEMA_V1_ALL,
+  SCHEMA_V2_ADD_COLUMNS,
+  SCHEMA_V2_PIPELINE_LOG,
+  SCHEMA_V2_INDEX_PIPELINE,
+} from './schema';
 
 export interface Migration {
   version: number;
@@ -24,7 +29,15 @@ export const MIGRATIONS: readonly Migration[] = [
     name: 'initial-schema',
     up: SCHEMA_V1_ALL,
   },
-  // Migraciones futuras se añaden aquí, sin tocar las anteriores.
+  {
+    version: 2,
+    name: 'ai-pipeline-embeddings',
+    up: [
+      ...SCHEMA_V2_ADD_COLUMNS,
+      SCHEMA_V2_PIPELINE_LOG,
+      SCHEMA_V2_INDEX_PIPELINE,
+    ],
+  },
 ];
 
 const TARGET_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 1;
