@@ -26,7 +26,7 @@ export const LockScreen: React.FC = () => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showSeedHint, setShowSeedHint] = useState(false);
+  const [showForgotPin, setShowForgotPin] = useState(false);
   const [bioVerified, setBioVerified] = useState(false);
 
   // Auto-prompt biometric on mount.
@@ -115,7 +115,7 @@ export const LockScreen: React.FC = () => {
         <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#c8bfff]/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative z-10 w-full max-w-md bg-[#15121b]/90 backdrop-blur-2xl border border-[#27272a] rounded-[2rem] shadow-2xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-md bg-[#15121b]/90 backdrop-blur-2xl border border-[#27272a] rounded-[2rem] shadow-2xl max-h-[95vh] overflow-y-auto no-scrollbar">
         <div className="p-8 sm:p-12 space-y-6">
           <div className="flex items-center justify-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white text-[#1b1b1b] flex items-center justify-center font-black text-xl shadow-lg">
@@ -222,17 +222,40 @@ export const LockScreen: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setShowSeedHint((v) => !v)}
+            onClick={() => setShowForgotPin((v) => !v)}
             className="w-full text-[11px] text-[#7e7576] hover:text-[#cfc4c5] transition-colors flex items-center justify-center gap-2"
           >
             <KeyRound className="w-3 h-3" />
             Forgot PIN? Restore with recovery seed.
           </button>
 
-          {showSeedHint && (
-            <div className="rounded-xl bg-[#0f0d15] border border-[#27272a] p-3 text-[11px] text-[#cfc4c5] leading-relaxed">
-              Open the Onboarding flow and choose <strong>Restore from seed</strong>.
-              If you never saved a seed, the encrypted DB cannot be recovered.
+          {showForgotPin && (
+            <div className="rounded-xl bg-[#0f0d15] border border-[#27272a] p-4 text-xs space-y-3">
+              <p className="text-[#cfc4c5] leading-relaxed">
+                If you have your <strong>12-word recovery seed</strong>, you can
+                restore your brain on this device. The current encrypted database
+                will be wiped, and you'll need to enter your seed to recover access.
+              </p>
+              <p className="text-[#fe7674] text-[11px] leading-relaxed">
+                Without a recovery seed, your data will be permanently lost.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPin(false)}
+                  className="py-2 px-3 rounded-xl bg-[#1d1a23] border border-[#27272a] text-[11px] font-bold hover:bg-[#27272a] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void wipe(); }}
+                  className="py-2 px-3 rounded-xl bg-[#c8bfff] text-[#190262] text-[11px] font-bold hover:bg-white transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <KeyRound className="w-3 h-3" />
+                  Restore from seed
+                </button>
+              </div>
             </div>
           )}
 
@@ -245,7 +268,7 @@ export const LockScreen: React.FC = () => {
                 onClick={() => {
                   const m = generateMnemonic12();
                   navigator.clipboard?.writeText(m);
-                  setShowSeedHint(true);
+                  setShowForgotPin(true);
                   alert('Mnemonic copied to clipboard (dev only).\n\n' + m);
                 }}
               >
