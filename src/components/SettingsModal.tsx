@@ -6,12 +6,13 @@ import { readVault, setMasterSalt } from '../security/keystore';
 import { generateSalt } from '../security/cipher';
 import { flush as flushDb, openDatabase, closeDatabase, queryAll as dbQueryAll, exec as execSql } from '../db/DbClient';
 import { safeLog } from '../security/logSanitizer';
+import { getLastBackupDate, shouldRemindBackup, dismissBackupReminder } from '../security/backup';
 import {
   X, KeyRound, Tag, Cpu, ShieldCheck, ChevronRight,
-  Download, Trash2, HardDrive, Plus, Pencil, Check, User,
+  Download, Trash2, HardDrive, Plus, Pencil, Check, User, Upload, Shield,
 } from 'lucide-react';
 
-type SettingsTab = 'profile' | 'pin' | 'categories' | 'ai-model';
+type SettingsTab = 'profile' | 'pin' | 'categories' | 'ai-model' | 'backup';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'pin', label: 'Change PIN', icon: <KeyRound className="w-4 h-4" /> },
   { id: 'categories', label: 'Categories', icon: <Tag className="w-4 h-4" /> },
   { id: 'ai-model', label: 'AI Model', icon: <Cpu className="w-4 h-4" /> },
+  { id: 'backup', label: 'Backup', icon: <Shield className="w-4 h-4" /> },
 ];
 
 // ───── Custom categories (localStorage-backed) ─────
@@ -51,7 +53,14 @@ function getAllCategories(): string[] {
 // ───── Main Modal ─────
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+  const { wipe } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('pin');
+  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [showBackupBadge, setShowBackupBadge] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) setShowBackupBadge(shouldRemindBackup());
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -75,7 +84,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="w-44 sm:w-52 border-r border-[#27272a] p-3 space-y-1 shrink-0">
+          <div className="w-44 sm:w-52 border-r border-[#27272a] p-3 flex flex-col shrink-0">
+            <div className="space-y-1 flex-1">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -88,9 +98,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               >
                 {tab.icon}
                 <span>{tab.label}</span>
+                {tab.id === 'backup' && showBackupBadge && activeTab !== 'backup' && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-[#fe7674] shrink-0" />
+                )}
                 {activeTab === tab.id && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
               </button>
             ))}
+            </div>
+
+            {/* Danger Zone */}
+            <div className="pt-3 mt-3 border-t border-[#27272a]">
+              {!confirmWipe ? (
+                <button
+                  onClick={() => setConfirmWipe(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold text-[#7e7576] hover:text-[#fe7674] hover:bg-[#fe7674]/10 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Wipe everything
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[10px] text-[#cfc4c5] leading-relaxed px-1">
+                    This will permanently <strong>destroy</strong> the encrypted
+                    database, vault, and all custom categories.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => setConfirmWipe(false)}
+                      className="py-1.5 px-2 rounded-lg bg-[#1d1a23] border border-[#27272a] text-[10px] font-bold hover:bg-[#27272a] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => { void wipe(); onClose(); }}
+                      className="py-1.5 px-2 rounded-lg bg-[#fe7674] text-[#1b1b1b] text-[10px] font-bold hover:bg-[#fe7674]/85 transition-colors"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6">
@@ -98,6 +146,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             {activeTab === 'pin' && <PinTab onClose={onClose} />}
             {activeTab === 'categories' && <CategoriesTab />}
             {activeTab === 'ai-model' && <AiModelTab />}
+            {activeTab === 'backup' && (
+              <BackupTab
+                onExportDone={() => setShowBackupBadge(false)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -639,6 +692,215 @@ function AiModelTab() {
         <HardDrive className="w-4 h-4 text-[#7e7576] shrink-0" />
         <span className="text-[#cfc4c5]">Available storage: </span>
         <span className="font-bold text-white">6.4 GB / 100 GB</span>
+      </div>
+    </div>
+  );
+}
+
+// ───── Backup Tab ─────
+
+function BackupTab({ onExportDone }: { onExportDone: () => void }) {
+  const { exportBackup, importBackup } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [exportState, setExportState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [importState, setImportState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [lastBackup, setLastBackup] = useState<Date | null>(getLastBackupDate);
+  const [showReminder, setShowReminder] = useState(shouldRemindBackup);
+
+  const handleExport = async () => {
+    setExportState('loading');
+    try {
+      await exportBackup();
+      setExportState('done');
+      setLastBackup(new Date());
+      setShowReminder(false);
+      onExportDone();
+      setTimeout(() => setExportState('idle'), 3000);
+    } catch (e) {
+      safeLog.error('export backup failed', e);
+      setExportState('error');
+      setTimeout(() => setExportState('idle'), 4000);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be selected again if needed.
+    e.target.value = '';
+
+    setImportError(null);
+    setImportState('loading');
+    try {
+      await importBackup(file);
+      setImportState('done');
+      setLastBackup(new Date());
+      setTimeout(() => setImportState('idle'), 3000);
+    } catch (err) {
+      setImportError((err as Error).message);
+      setImportState('error');
+    }
+  };
+
+  const handleDismissReminder = () => {
+    dismissBackupReminder();
+    setShowReminder(false);
+    setLastBackup(getLastBackupDate());
+    onExportDone();
+  };
+
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h3 className="text-base font-bold text-white">Backup & Restore</h3>
+        <p className="text-xs text-[#7e7576]">
+          Export an encrypted copy of your Brain to keep it safe against accidental deletion.
+        </p>
+      </div>
+
+      {/* Weekly reminder banner */}
+      {showReminder && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[#fe7674]/10 border border-[#fe7674]/30 text-xs text-[#fe7674]">
+          <Shield className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <div className="font-bold">Backup recommended</div>
+            <div className="text-[#fe7674]/80 mt-0.5">
+              {lastBackup
+                ? `Last backup was on ${formatDate(lastBackup)}.`
+                : 'You have never exported a backup.'}
+            </div>
+          </div>
+          <button
+            onClick={handleDismissReminder}
+            className="text-[#fe7674]/60 hover:text-[#fe7674] transition-colors"
+            title="Dismiss reminder"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Export section */}
+      <div className="p-4 rounded-2xl bg-[#1d1a23] border border-[#27272a] space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#c8bfff]/15 flex items-center justify-center shrink-0">
+            <Download className="w-4 h-4 text-[#c8bfff]" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white">Export backup</div>
+            <div className="text-[10px] text-[#7e7576]">
+              {lastBackup ? `Last backup: ${formatDate(lastBackup)}` : 'Never backed up'}
+            </div>
+          </div>
+          {exportState === 'done' && (
+            <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30">
+              Saved ✓
+            </span>
+          )}
+          {exportState === 'error' && (
+            <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#fe7674]/15 text-[#fe7674] border border-[#fe7674]/30">
+              Failed
+            </span>
+          )}
+        </div>
+
+        <p className="text-[11px] text-[#cfc4c5] leading-relaxed">
+          Downloads a <code className="text-[#c8bfff]">.2brain</code> file to your computer.
+          The file is <strong className="text-white">fully encrypted</strong> — without your PIN it is unreadable.
+        </p>
+
+        <button
+          onClick={handleExport}
+          disabled={exportState === 'loading'}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#c8bfff] text-[#190262] font-bold text-xs hover:bg-white transition-colors disabled:opacity-50"
+        >
+          {exportState === 'loading' ? (
+            <div className="w-4 h-4 border-2 border-[#190262] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          {exportState === 'loading' ? 'Preparing download...' : 'Download backup (.2brain)'}
+        </button>
+      </div>
+
+      {/* Import section */}
+      <div className="p-4 rounded-2xl bg-[#1d1a23] border border-[#27272a] space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#fe7674]/15 flex items-center justify-center shrink-0">
+            <Upload className="w-4 h-4 text-[#fe7674]" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white">Restore from backup</div>
+            <div className="text-[10px] text-[#7e7576]">Replaces current data with a backup file</div>
+          </div>
+          {importState === 'done' && (
+            <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30">
+              Restored ✓
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-[#fe7674]/10 border border-[#fe7674]/30 text-[11px] text-[#fe7674]">
+          <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            <strong>Important:</strong> the backup must have been created with your <strong>current PIN</strong>.
+            The app will verify this automatically before replacing any data.
+          </span>
+        </div>
+
+        {importError && (
+          <div className="px-4 py-3 rounded-xl bg-[#fe7674]/15 border border-[#fe7674]/40 text-[#fe7674] text-xs">
+            {importError}
+          </div>
+        )}
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".2brain"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+
+        <button
+          onClick={() => {
+            setImportError(null);
+            setImportState('idle');
+            fileInputRef.current?.click();
+          }}
+          disabled={importState === 'loading'}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a] hover:border-[#fe7674]/50 text-white font-bold text-xs transition-colors disabled:opacity-50"
+        >
+          {importState === 'loading' ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Upload className="w-4 h-4 text-[#fe7674]" />
+          )}
+          {importState === 'loading' ? 'Restoring...' : 'Choose .2brain file to restore'}
+        </button>
+      </div>
+
+      {/* How it works info */}
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold text-[#7e7576] uppercase tracking-wider">How it works</p>
+        <div className="space-y-2">
+          {[
+            { icon: <ShieldCheck className="w-3.5 h-3.5 text-green-400" />, text: 'Your backup is AES-256-GCM encrypted — unreadable without your PIN.' },
+            { icon: <HardDrive className="w-3.5 h-3.5 text-[#c8bfff]" />, text: 'Store the .2brain file on a USB drive, cloud storage, or email it to yourself.' },
+            { icon: <Download className="w-3.5 h-3.5 text-[#c8bfff]" />, text: 'To recover after accidental deletion, restore the file here and unlock with your PIN.' },
+          ].map(({ icon, text }, i) => (
+            <div key={i} className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a]">
+              <span className="mt-0.5 shrink-0">{icon}</span>
+              <span className="text-[11px] text-[#cfc4c5] leading-relaxed">{text}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

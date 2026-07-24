@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Lock, Unlock, Fingerprint, ShieldCheck, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Lock, Unlock, Fingerprint, ShieldCheck, KeyRound, CheckCircle2, Trash2 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { generateMnemonic12 } from '../security/recoverySeed';
 import { useKeypadInput } from './useKeypadInput';
@@ -276,6 +276,22 @@ export const LockScreen: React.FC = () => {
               </code>
             </div>
           )}
+
+          {/* Wipe Everything — nuke completo (dev/test convenience). */}
+          <div className="pt-2 border-t border-[#27272a]">
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm('This will permanently delete ALL data (vault, encrypted DB, and custom categories). The app will reload in onboarding mode. Continue?')) {
+                  void wipe();
+                }
+              }}
+              className="w-full text-[10px] text-[#7e7576] hover:text-[#fe7674] transition-colors flex items-center justify-center gap-1.5 py-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              Wipe everything & start fresh
+            </button>
+          </div>
 
           {/* Escape hatch: cuando se agotan los intentos, mostramos un
               botón explícito que wipe + vuelve a setting-up. */}
