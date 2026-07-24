@@ -30,15 +30,15 @@ export const Header: React.FC<HeaderProps> = ({
   const userInitials = currentUser?.avatarInitials || 'YB';
 
   return (
-    <header className="fixed top-0 w-full z-50 flex justify-between items-center h-16 sm:h-20 px-3 sm:px-8 border-b border-[#27272a] bg-[#15121b]/80 backdrop-blur-md">
+    <header className="fixed top-0 w-full z-50 flex justify-between items-center h-14 sm:h-20 px-2 sm:px-8 border-b border-[#27272a] bg-[#15121b]/80 backdrop-blur-md">
       {/* Brand & Status */}
-      <div className="flex items-center gap-2 sm:gap-6 shrink-0">
-        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setSearchQuery('')}>
-          <span className="text-2xl sm:text-3xl font-black tracking-tighter text-white italic group-hover:text-neutral-300 transition-colors">
+      <div className="flex items-center gap-1 sm:gap-6 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 cursor-pointer group" onClick={() => setSearchQuery('')}>
+          <span className="text-lg sm:text-3xl font-black tracking-tighter text-white italic group-hover:text-neutral-300 transition-colors">
             2Brain
           </span>
         </div>
-        <div className="hidden md:flex items-center gap-3 px-3.5 py-1.5 bg-[#1d1a23] rounded-full border border-[#27272a] shadow-inner">
+        <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 bg-[#1d1a23] rounded-full border border-[#27272a] shadow-inner">
           <span className="w-2 h-2 rounded-full bg-[#fe7674] animate-pulse"></span>
           <span className="text-[10px] text-[#cfc4c5] uppercase tracking-[0.2em] font-bold">
             Neural Link: Online
@@ -47,23 +47,21 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Search Brain Input */}
-      <div className="flex-grow max-w-xl mx-2 sm:mx-4">
+      <div className="flex-grow max-w-xl mx-1 sm:mx-4">
         <div 
           onClick={onOpenCmdK}
-          className="bg-[#0f0d15] border border-[#27272a] rounded-full flex items-center px-3 sm:px-4 py-1.5 sm:py-2 gap-2 sm:gap-3 group focus-within:border-white hover:border-[#7e7576] transition-all duration-300 justify-between cursor-pointer"
+          className="bg-[#0f0d15] border border-[#27272a] rounded-full flex items-center px-2 sm:px-4 py-1.5 sm:py-2 gap-1 sm:gap-3 group focus-within:border-white hover:border-[#7e7576] transition-all duration-300 justify-between cursor-pointer"
         >
-          <div className="flex items-center gap-2 sm:gap-3 flex-grow min-w-0">
+          <div className="flex items-center gap-1 sm:gap-3 flex-grow min-w-0">
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
-              width="18" 
-              height="18" 
               viewBox="0 0 24 24" 
               fill="none" 
               stroke="currentColor" 
               strokeWidth="2" 
               strokeLinecap="round" 
               strokeLinejoin="round" 
-              className="text-[#cfc4c5] group-hover:text-white transition-colors shrink-0"
+              className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-[#cfc4c5] group-hover:text-white transition-colors shrink-0"
             >
               <path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path>
               <path d="M13.9 21.818a10 10 0 0 1-3.8 0"></path>
@@ -74,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
               <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"></path>
               <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"></path>
             </svg>
-            <span className="text-xs sm:text-sm text-[#7e7576] truncate font-medium">
+            <span className="hidden sm:inline text-xs sm:text-sm text-[#7e7576] truncate font-medium">
               {searchQuery ? searchQuery : "Search memory, tag or semantic synthesis..."}
             </span>
           </div>
@@ -88,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-4 shrink-0">
         {/* New Note Button */}
         <button
           onClick={onOpenNewNote}
@@ -111,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-3 w-80 bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute right-0 mt-3 w-72 sm:w-80 max-w-[calc(100vw-1rem)] bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl p-3 sm:p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between border-b border-[#27272a] pb-3 mb-3">
                 <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                   <Cpu className="w-3.5 h-3.5 text-[#fe7674]" /> Neural Signal Stream
@@ -141,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* User Profile */}
-        <div className="relative ml-2">
+        <div className="relative ml-1 sm:ml-2">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="w-10 h-10 rounded-full bg-white flex items-center justify-center font-bold text-xs text-[#1b1b1b] shadow-md hover:scale-105 active:scale-95 transition-all"
@@ -151,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-3 w-64 bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in duration-150">
+            <div className="absolute right-0 mt-3 w-56 sm:w-64 max-w-[calc(100vw-1rem)] bg-[#15121b] border border-[#27272a] rounded-2xl shadow-2xl p-3 sm:p-4 z-50 animate-in fade-in duration-150">
               <div className="flex items-center gap-3 border-b border-[#27272a] pb-3 mb-3">
                 <div className="w-9 h-9 rounded-full bg-white text-[#1b1b1b] font-bold flex items-center justify-center text-xs">
                   {userInitials}
