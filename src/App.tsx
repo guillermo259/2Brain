@@ -13,7 +13,7 @@ import { flush as flushDb } from './db/DbClient';
 import { vectorRepo } from './db/VectorRepository';
 import { safeLog } from './security/logSanitizer';
 import { runPipeline, markAutoCategorized } from './ai/Pipeline';
-import { initEmbeddings, isEmbeddingReady, getEmbeddingDownloadProgress, isEmbeddingCached } from './ai/EmbeddingService';
+import { initEmbeddings, isEmbeddingReady, getEmbeddingDownloadProgress, isEmbeddingCached, extractEmbedding } from './ai/EmbeddingService';
 import { isLlmReady } from './ai/LlmService';
 import { NoteItem } from './types';
 import { Brain, Cpu, Download, HardDrive, X, AlertTriangle } from 'lucide-react';
@@ -162,6 +162,43 @@ export default function App() {
     return Array.from(set).sort();
   }, [notes]);
 
+  // ──── Semantic search state ────
+  const [semanticResults, setSemanticResults] = useState<string[]>([]); // note IDs
+  const [isSearching, setIsSearching] = useState(false);
+  const semanticDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Trigger semantic search when query changes
+  useEffect(() => {
+    if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current);
+
+    const q = searchQuery.trim();
+    if (!q || !isEmbeddingReady()) {
+      setSemanticResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    semanticDebounceRef.current = setTimeout(async () => {
+      try {
+        const queryEmbedding = await extractEmbedding(q);
+        const hits = await vectorRepo.search(queryEmbedding, 20);
+        // Only keep results with similarity > 0.3 (meaningful matches)
+        const relevantIds = hits
+          .filter((h) => h.similarity > 0.3)
+          .map((h) => h.noteId);
+        setSemanticResults(relevantIds);
+      } catch {
+        setSemanticResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current);
+    };
+  }, [searchQuery]);
+
   const filteredNotes = useMemo(() => {
     let result = notes;
 
@@ -178,17 +215,33 @@ export default function App() {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter((note) => {
+
+      // Keyword matches
+      const keywordMatches = result.filter((note) => {
         const matchesTitle = note.title.toLowerCase().includes(q);
         const matchesContent = note.content.toLowerCase().includes(q);
         const matchesTag = note.tags.some((t) => t.toLowerCase().includes(q));
         const matchesCategory = note.category.toLowerCase().includes(q);
         return matchesTitle || matchesContent || matchesTag || matchesCategory;
       });
+
+      // Semantic matches (from embedding similarity)
+      const semanticMatches = semanticResults.length > 0
+        ? result.filter((note) => semanticResults.includes(note.id))
+        : [];
+
+      // Merge: keyword first, then semantic (deduplicated)
+      const keywordIds = new Set(keywordMatches.map((n) => n.id));
+      const combined = [
+        ...keywordMatches,
+        ...semanticMatches.filter((n) => !keywordIds.has(n.id)),
+      ];
+
+      result = combined;
     }
 
     return result;
-  }, [notes, activeCategory, activeTag, searchQuery]);
+  }, [notes, activeCategory, activeTag, searchQuery, semanticResults]);
 
   const handleTogglePin = useCallback(
     async (noteId: string) => {
