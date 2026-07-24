@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { NoteItem, Category, CATEGORIES, CATEGORY_COLORS } from '../types';
-import { X, Sparkles } from 'lucide-react';
+import { NoteItem } from '../types';
+import { X, Sparkles, Brain } from 'lucide-react';
 
 interface NewNoteModalProps {
   isOpen: boolean;
@@ -13,38 +13,27 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
   onClose,
   onAddNote,
 }) => {
-  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<Category>('General');
-  const [tagsInput, setTagsInput] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-
-    const tags = tagsInput
-      .split(',')
-      .map((t) => t.trim().toUpperCase())
-      .filter((t) => t.length > 0);
+    if (!content.trim()) return;
 
     const newNote: NoteItem = {
       id: `note-${Date.now()}`,
-      title: title.trim(),
+      title: '', // AI will generate the title
       content: content.trim(),
-      category,
-      tags,
+      category: '', // AI will assign category
+      tags: [], // AI will assign tags
       isPinned: false,
       timestamp: 'JUST NOW',
     };
 
     onAddNote(newNote);
     onClose();
-    setTitle('');
     setContent('');
-    setCategory('General');
-    setTagsInput('');
   };
 
   return (
@@ -70,75 +59,28 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto no-scrollbar">
-          {/* Title */}
+          {/* Content — the main and only required input */}
           <div>
             <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-1.5">
-              Title
-            </label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Note title..."
-              autoFocus
-              className="w-full bg-[#1d1a23] border border-[#27272a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition-colors"
-            />
-          </div>
-
-          {/* Category selector */}
-          <div>
-            <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-2">
-              Category
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-                    category === cat
-                      ? 'bg-white text-[#1b1b1b] shadow-lg'
-                      : 'bg-[#1d1a23] border border-[#27272a] text-[#cfc4c5] hover:border-[#7e7576]'
-                  }`}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: CATEGORY_COLORS[cat] }}
-                  />
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Content */}
-          <div>
-            <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-1.5">
-              Content
+              What's on your mind?
             </label>
             <textarea
-              rows={5}
+              rows={7}
+              required
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your note here..."
+              placeholder="Just write what you're thinking... AI will organize it for you."
+              autoFocus
               className="w-full bg-[#1d1a23] border border-[#27272a] rounded-xl p-4 text-sm text-white focus:outline-none focus:border-white transition-colors resize-none"
             />
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="block text-[10px] font-bold text-[#7e7576] uppercase tracking-wider mb-1.5">
-              Tags (comma separated)
-            </label>
-            <input
-              type="text"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="e.g. work, ideas, personal"
-              className="w-full bg-[#1d1a23] border border-[#27272a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
-            />
+          {/* AI hint */}
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#1d1a23] border border-[#27272a]">
+            <Brain className="w-4 h-4 text-[#c8bfff] shrink-0" />
+            <p className="text-[10px] text-[#7e7576] leading-relaxed">
+              AI will generate a title, assign a category, and add relevant tags automatically.
+            </p>
           </div>
 
           <div className="pt-2">
