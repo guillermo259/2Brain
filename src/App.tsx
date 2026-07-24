@@ -6,6 +6,7 @@ import { Graph2D } from './components/Graph2D';
 import { CmdKModal } from './components/CmdKModal';
 import { NewNoteModal } from './components/NewNoteModal';
 import { NoteDetailModal } from './components/NoteDetailModal';
+import { SettingsModal } from './components/SettingsModal';
 import { useAuth } from './auth/AuthProvider';
 import { notesRepo } from './db/NotesRepository';
 import { flush as flushDb } from './db/DbClient';
@@ -39,6 +40,7 @@ export default function App() {
 
   const [isCmdKOpen, setIsCmdKOpen] = useState(false);
   const [isNewNoteOpen, setIsNewNoteOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [inspectedNote, setInspectedNote] = useState<NoteItem | null>(null);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'feed' | 'graph'>('feed');
@@ -174,6 +176,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         onOpenCmdK={() => setIsCmdKOpen(true)}
         onOpenNewNote={() => setIsNewNoteOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         noteCount={notes.length}
         currentUser={user}
         onLogout={handleLogout}
@@ -301,6 +304,11 @@ export default function App() {
         onClose={() => setInspectedNote(null)}
         onUpdateNote={handleUpdateNote}
         onDeleteNote={handleDeleteNote}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
